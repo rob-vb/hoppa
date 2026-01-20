@@ -471,17 +471,19 @@ export default function SchemaDetailsScreen() {
               <View style={styles.rowInputItemWide} />
             </View>
 
-            <View style={styles.switchRow}>
-              <ThemedText style={styles.switchLabel}>Progressive Overload</ThemedText>
-              <Switch
-                value={exercise.progressiveLoadingEnabled}
-                onValueChange={(value) =>
-                  handleUpdateExerciseField(exercise.id, 'progressiveLoadingEnabled', value)
-                }
-                trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
+            {currentSchema?.progressiveLoadingEnabled && (
+              <View style={styles.switchRow}>
+                <ThemedText style={styles.switchLabel}>Progressive Overload</ThemedText>
+                <Switch
+                  value={exercise.progressiveLoadingEnabled}
+                  onValueChange={(value) =>
+                    handleUpdateExerciseField(exercise.id, 'progressiveLoadingEnabled', value)
+                  }
+                  trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            )}
           </View>
         )}
       </View>

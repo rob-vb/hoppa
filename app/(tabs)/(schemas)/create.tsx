@@ -498,19 +498,21 @@ export default function CreateSchemaScreen() {
         </View>
       </View>
 
-      <View style={styles.switchRow}>
-        <ThemedText style={styles.switchLabel}>Progressive Overload</ThemedText>
-        <Switch
-          value={exercise.progressiveLoadingEnabled}
-          onValueChange={(value) =>
-            handleUpdateExercise(dayId, exercise.id, {
-              progressiveLoadingEnabled: value,
-            })
-          }
-          trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
-          thumbColor="#FFFFFF"
-        />
-      </View>
+      {progressiveLoadingEnabled && (
+        <View style={styles.switchRow}>
+          <ThemedText style={styles.switchLabel}>Progressive Overload</ThemedText>
+          <Switch
+            value={exercise.progressiveLoadingEnabled}
+            onValueChange={(value) =>
+              handleUpdateExercise(dayId, exercise.id, {
+                progressiveLoadingEnabled: value,
+              })
+            }
+            trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
+      )}
     </View>
   );
 
