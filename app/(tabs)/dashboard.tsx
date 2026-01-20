@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Card } from '@/components/ui/card';
+import { OverviewCard } from '@/components/ui/overview-card';
 import { Colors } from '@/constants/theme';
 import * as db from '@/db/database';
 
@@ -193,26 +194,60 @@ export default function DashboardScreen() {
         {/* Overview Cards */}
         <ThemedText style={styles.sectionTitle}>Overview</ThemedText>
         <View style={styles.statsGrid}>
-          <Card style={styles.statCard}>
-            <ThemedText style={styles.statValue}>{stats?.workoutCount ?? 0}</ThemedText>
-            <ThemedText style={styles.statLabel}>Workouts</ThemedText>
-          </Card>
-          <Card style={styles.statCard}>
-            <ThemedText style={[styles.statValue, styles.statValueSuccess]}>
-              {stats?.progressionCount ?? 0}
-            </ThemedText>
-            <ThemedText style={styles.statLabel}>Progressions</ThemedText>
-          </Card>
-          <Card style={styles.statCard}>
-            <ThemedText style={styles.statValue}>
-              {formatVolume(stats?.totalVolume ?? 0)}
-            </ThemedText>
-            <ThemedText style={styles.statLabel}>Volume</ThemedText>
-          </Card>
-          <Card style={styles.statCard}>
-            <ThemedText style={styles.statValue}>{stats?.totalReps ?? 0}</ThemedText>
-            <ThemedText style={styles.statLabel}>Total Reps</ThemedText>
-          </Card>
+          <OverviewCard
+            value={stats?.workoutCount ?? 0}
+            label="Workouts"
+            icon="fitness-center"
+            variant="primary"
+            trend={
+              stats
+                ? {
+                    value: stats.workoutCountDiff,
+                    label: 'vs previous period',
+                  }
+                : undefined
+            }
+          />
+          <OverviewCard
+            value={stats?.progressionCount ?? 0}
+            label="Progressions"
+            icon="trending-up"
+            variant="success"
+            trend={
+              stats
+                ? {
+                    value: stats.progressionCountDiff,
+                    label: 'vs previous period',
+                  }
+                : undefined
+            }
+          />
+          <OverviewCard
+            value={formatVolume(stats?.totalVolume ?? 0)}
+            label="Volume (kg)"
+            icon="monitor-weight"
+            trend={
+              stats
+                ? {
+                    value: Math.round(stats.totalVolumeDiff / 1000),
+                    label: 'kg vs previous',
+                  }
+                : undefined
+            }
+          />
+          <OverviewCard
+            value={stats?.totalReps ?? 0}
+            label="Total Reps"
+            icon="repeat"
+            trend={
+              stats
+                ? {
+                    value: stats.totalRepsDiff,
+                    label: 'vs previous period',
+                  }
+                : undefined
+            }
+          />
         </View>
 
         {/* Exercise Progress */}
@@ -562,24 +597,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
     marginBottom: 24,
-  },
-  statCard: {
-    width: '47%',
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  statValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: Colors.dark.text,
-  },
-  statValueSuccess: {
-    color: '#10B981',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: Colors.dark.textSecondary,
-    marginTop: 4,
   },
   exerciseProgressCard: {
     marginBottom: 24,

@@ -1198,10 +1198,15 @@ export interface DashboardStats {
   progressionCount: number;
   totalVolume: number; // total reps * weight
   totalReps: number;
+  // Comparison to previous period
+  workoutCountDiff: number;
+  progressionCountDiff: number;
+  totalVolumeDiff: number;
+  totalRepsDiff: number;
 }
 
 /**
- * Get dashboard statistics for a date range
+ * Get dashboard statistics for a date range with comparison to previous period
  */
 export async function getDashboardStats(
   startDate: number,
@@ -1209,14 +1214,18 @@ export async function getDashboardStats(
 ): Promise<DashboardStats> {
   const database = await getDatabase();
 
-  // Get completed workout count
+  // Calculate previous period range (same duration, immediately before)
+  const periodDuration = endDate - startDate;
+  const prevStartDate = startDate - periodDuration;
+  const prevEndDate = startDate;
+
+  // Get current period stats
   const workoutResult = await database.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM workout_sessions
      WHERE status = 'completed' AND completed_at >= ? AND completed_at <= ?`,
     [startDate, endDate]
   );
 
-  // Get progression count
   const progressionResult = await database.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM exercise_logs el
      JOIN workout_sessions ws ON el.session_id = ws.id
@@ -1226,7 +1235,6 @@ export async function getDashboardStats(
     [startDate, endDate]
   );
 
-  // Get total volume and reps
   const volumeResult = await database.getFirstAsync<{
     total_volume: number | null;
     total_reps: number | null;
@@ -1243,11 +1251,57 @@ export async function getDashboardStats(
     [startDate, endDate]
   );
 
+  // Get previous period stats for comparison
+  const prevWorkoutResult = await database.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM workout_sessions
+     WHERE status = 'completed' AND completed_at >= ? AND completed_at < ?`,
+    [prevStartDate, prevEndDate]
+  );
+
+  const prevProgressionResult = await database.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM exercise_logs el
+     JOIN workout_sessions ws ON el.session_id = ws.id
+     WHERE el.progression_earned = 1
+     AND ws.status = 'completed'
+     AND ws.completed_at >= ? AND ws.completed_at < ?`,
+    [prevStartDate, prevEndDate]
+  );
+
+  const prevVolumeResult = await database.getFirstAsync<{
+    total_volume: number | null;
+    total_reps: number | null;
+  }>(
+    `SELECT
+       COALESCE(SUM(sl.completed_reps * el.total_weight), 0) as total_volume,
+       COALESCE(SUM(sl.completed_reps), 0) as total_reps
+     FROM set_logs sl
+     JOIN exercise_logs el ON sl.exercise_log_id = el.id
+     JOIN workout_sessions ws ON el.session_id = ws.id
+     WHERE sl.completed_reps IS NOT NULL
+     AND ws.status = 'completed'
+     AND ws.completed_at >= ? AND ws.completed_at < ?`,
+    [prevStartDate, prevEndDate]
+  );
+
+  const workoutCount = workoutResult?.count ?? 0;
+  const progressionCount = progressionResult?.count ?? 0;
+  const totalVolume = Math.round(volumeResult?.total_volume ?? 0);
+  const totalReps = volumeResult?.total_reps ?? 0;
+
+  const prevWorkoutCount = prevWorkoutResult?.count ?? 0;
+  const prevProgressionCount = prevProgressionResult?.count ?? 0;
+  const prevTotalVolume = Math.round(prevVolumeResult?.total_volume ?? 0);
+  const prevTotalReps = prevVolumeResult?.total_reps ?? 0;
+
   return {
-    workoutCount: workoutResult?.count ?? 0,
-    progressionCount: progressionResult?.count ?? 0,
-    totalVolume: Math.round(volumeResult?.total_volume ?? 0),
-    totalReps: volumeResult?.total_reps ?? 0,
+    workoutCount,
+    progressionCount,
+    totalVolume,
+    totalReps,
+    workoutCountDiff: workoutCount - prevWorkoutCount,
+    progressionCountDiff: progressionCount - prevProgressionCount,
+    totalVolumeDiff: totalVolume - prevTotalVolume,
+    totalRepsDiff: totalReps - prevTotalReps,
   };
 }
 
