@@ -16,6 +16,7 @@ import { FunctionReference, FunctionReturnType } from 'convex/server';
 import { Id } from '../convex/_generated/dataModel';
 import { api } from '../convex/_generated/api';
 import * as db from '@/db/database';
+import * as SecureStore from 'expo-secure-store';
 import {
   Schema,
   WorkoutDay,
@@ -111,16 +112,31 @@ export function resolveConflict(localUpdatedAt: number, remoteUpdatedAt: number)
 class SyncQueue {
   private queue: SyncQueueItem[] = [];
   private storageKey = 'hoppa_sync_queue';
+  private isLoaded = false;
 
   async load(): Promise<void> {
-    // In a real implementation, load from AsyncStorage or SQLite
-    // For now, queue starts empty on app launch
-    this.queue = [];
+    if (this.isLoaded) return;
+    try {
+      const stored = await SecureStore.getItemAsync(this.storageKey);
+      if (stored) {
+        this.queue = JSON.parse(stored);
+      } else {
+        this.queue = [];
+      }
+      this.isLoaded = true;
+    } catch (error) {
+      console.warn('[SyncQueue] Failed to load queue from storage:', error);
+      this.queue = [];
+      this.isLoaded = true;
+    }
   }
 
   async save(): Promise<void> {
-    // Persist queue to storage
-    // Would use AsyncStorage.setItem(this.storageKey, JSON.stringify(this.queue))
+    try {
+      await SecureStore.setItemAsync(this.storageKey, JSON.stringify(this.queue));
+    } catch (error) {
+      console.warn('[SyncQueue] Failed to save queue to storage:', error);
+    }
   }
 
   async add(item: Omit<SyncQueueItem, 'id' | 'timestamp' | 'retryCount'>): Promise<void> {
@@ -181,7 +197,12 @@ class SyncQueue {
 
   async clear(): Promise<void> {
     this.queue = [];
-    await this.save();
+    this.isLoaded = false;
+    try {
+      await SecureStore.deleteItemAsync(this.storageKey);
+    } catch (error) {
+      console.warn('[SyncQueue] Failed to clear queue from storage:', error);
+    }
   }
 }
 
@@ -193,15 +214,40 @@ class IdMappingStore {
   private mappings: Map<string, IdMapping> = new Map();
   private reverseMap: Map<string, string> = new Map(); // convexId -> localId
   private storageKey = 'hoppa_id_mappings';
+  private isLoaded = false;
 
   async load(): Promise<void> {
-    // Load from storage
-    this.mappings = new Map();
-    this.reverseMap = new Map();
+    if (this.isLoaded) return;
+    try {
+      const stored = await SecureStore.getItemAsync(this.storageKey);
+      if (stored) {
+        const mappingsArray: IdMapping[] = JSON.parse(stored);
+        this.mappings = new Map();
+        this.reverseMap = new Map();
+        for (const mapping of mappingsArray) {
+          this.mappings.set(mapping.localId, mapping);
+          this.reverseMap.set(mapping.convexId, mapping.localId);
+        }
+      } else {
+        this.mappings = new Map();
+        this.reverseMap = new Map();
+      }
+      this.isLoaded = true;
+    } catch (error) {
+      console.warn('[IdMappingStore] Failed to load mappings from storage:', error);
+      this.mappings = new Map();
+      this.reverseMap = new Map();
+      this.isLoaded = true;
+    }
   }
 
   async save(): Promise<void> {
-    // Persist to storage
+    try {
+      const mappingsArray = Array.from(this.mappings.values());
+      await SecureStore.setItemAsync(this.storageKey, JSON.stringify(mappingsArray));
+    } catch (error) {
+      console.warn('[IdMappingStore] Failed to save mappings to storage:', error);
+    }
   }
 
   async set(localId: string, convexId: string, entityType: SyncEntityType): Promise<void> {
@@ -248,7 +294,12 @@ class IdMappingStore {
   async clear(): Promise<void> {
     this.mappings = new Map();
     this.reverseMap = new Map();
-    await this.save();
+    this.isLoaded = false;
+    try {
+      await SecureStore.deleteItemAsync(this.storageKey);
+    } catch (error) {
+      console.warn('[IdMappingStore] Failed to clear mappings from storage:', error);
+    }
   }
 }
 

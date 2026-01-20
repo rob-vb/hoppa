@@ -9,6 +9,7 @@ import {
 } from '@/db/types';
 import * as db from '@/db/database';
 import { isProgressionEnabled } from '@/utils/progression-engine';
+import { syncEngine } from '@/utils/sync-engine';
 
 export interface ExerciseLogWithDetails extends ExerciseLogWithSets {
   exercise: Exercise;
@@ -89,6 +90,14 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
       // Create workout session
       const session = await db.createWorkoutSession(schemaId, day.id);
 
+      // Queue session for sync
+      await syncEngine.queueCreate('workoutSession', session.id, {
+        schemaId: session.schemaId,
+        dayId: session.dayId,
+        startedAt: session.startedAt,
+        status: session.status,
+      });
+
       // Create exercise logs for each exercise
       const exerciseLogs: ActiveExerciseLog[] = [];
       for (const exercise of day.exercises) {
@@ -99,12 +108,27 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
           totalWeight
         );
 
+        // Queue exercise log for sync
+        await syncEngine.queueCreate('exerciseLog', exerciseLog.id, {
+          sessionId: exerciseLog.sessionId,
+          exerciseId: exerciseLog.exerciseId,
+          status: exerciseLog.status,
+          totalWeight: exerciseLog.totalWeight,
+        });
+
         // Create set logs for each set
         const sets: SetLog[] = [];
         const targetReps = `${exercise.targetRepsMin}-${exercise.targetRepsMax}`;
         for (let i = 1; i <= exercise.targetSets; i++) {
           const setLog = await db.createSetLog(exerciseLog.id, i, targetReps);
           sets.push(setLog);
+
+          // Queue set log for sync
+          await syncEngine.queueCreate('setLog', setLog.id, {
+            exerciseLogId: setLog.exerciseLogId,
+            setNumber: setLog.setNumber,
+            targetReps: setLog.targetReps,
+          });
         }
 
         exerciseLogs.push({
@@ -193,11 +217,22 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
           const newWeight =
             log.exercise.currentWeight + log.exercise.progressionIncrement;
           await db.updateExercise(log.exercise.id, { currentWeight: newWeight });
+
+          // Queue exercise update for sync
+          await syncEngine.queueUpdate('exercise', log.exercise.id, {
+            currentWeight: newWeight,
+          });
         }
       }
 
       // Complete the session
       await db.completeWorkoutSession(session.id);
+
+      // Queue session update for sync
+      await syncEngine.queueUpdate('workoutSession', session.id, {
+        status: 'completed',
+        completedAt: Date.now(),
+      });
 
       set({
         session: null,
@@ -223,6 +258,9 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       await db.deleteWorkoutSession(session.id);
+
+      // Queue session delete for sync
+      await syncEngine.queueDelete('workoutSession', session.id);
 
       set({
         session: null,
@@ -276,6 +314,11 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
           ),
         })),
       }));
+
+      // Queue set log update for sync
+      await syncEngine.queueUpdate('setLog', setLogId, {
+        completedReps: reps,
+      });
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to log reps',
@@ -298,6 +341,11 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
           ),
         })),
       }));
+
+      // Queue set log update for sync
+      await syncEngine.queueUpdate('setLog', setLogId, {
+        completedReps: null,
+      });
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to clear reps',
@@ -328,6 +376,12 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
             : log
         ),
       });
+
+      // Queue exercise log update for sync
+      await syncEngine.queueUpdate('exerciseLog', exerciseLogId, {
+        status: 'completed',
+        progressionEarned,
+      });
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to complete exercise',
@@ -348,6 +402,11 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
         exerciseLogs: exerciseLogs.map((log) =>
           log.id === exerciseLogId ? { ...log, status: 'skipped' } : log
         ),
+      });
+
+      // Queue exercise log update for sync
+      await syncEngine.queueUpdate('exerciseLog', exerciseLogId, {
+        status: 'skipped',
       });
     } catch (error) {
       set({

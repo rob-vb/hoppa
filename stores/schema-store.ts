@@ -8,6 +8,7 @@ import {
   EquipmentType,
 } from '@/db/types';
 import * as db from '@/db/database';
+import { syncEngine } from '@/utils/sync-engine';
 
 interface SchemaState {
   schemas: Schema[];
@@ -91,6 +92,13 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
         schemas: [schema, ...state.schemas],
         isLoading: false,
       }));
+
+      // Queue for sync
+      await syncEngine.queueCreate('schema', schema.id, {
+        name: schema.name,
+        progressiveLoadingEnabled: schema.progressiveLoadingEnabled,
+      });
+
       return schema;
     } catch (error) {
       set({
@@ -120,6 +128,9 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
             : state.currentSchema,
         isLoading: false,
       }));
+
+      // Queue for sync
+      await syncEngine.queueUpdate('schema', id, updates);
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to update schema',
@@ -139,6 +150,9 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
         currentSchema: state.currentSchema?.id === id ? null : state.currentSchema,
         isLoading: false,
       }));
+
+      // Queue for sync
+      await syncEngine.queueDelete('schema', id);
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to delete schema',
@@ -169,6 +183,13 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
           };
         }
         return { isLoading: false };
+      });
+
+      // Queue for sync
+      await syncEngine.queueCreate('workoutDay', day.id, {
+        schemaId: day.schemaId,
+        name: day.name,
+        orderIndex: day.orderIndex,
       });
 
       return day;
@@ -203,6 +224,9 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
         }
         return { isLoading: false };
       });
+
+      // Queue for sync
+      await syncEngine.queueUpdate('workoutDay', id, updates);
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to update workout day',
@@ -229,6 +253,9 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
         }
         return { isLoading: false };
       });
+
+      // Queue for sync
+      await syncEngine.queueDelete('workoutDay', id);
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to delete workout day',
@@ -268,6 +295,21 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
         return { isLoading: false };
       });
 
+      // Queue for sync
+      await syncEngine.queueCreate('exercise', newExercise.id, {
+        dayId: newExercise.dayId,
+        name: newExercise.name,
+        equipmentType: newExercise.equipmentType,
+        baseWeight: newExercise.baseWeight,
+        targetSets: newExercise.targetSets,
+        targetRepsMin: newExercise.targetRepsMin,
+        targetRepsMax: newExercise.targetRepsMax,
+        progressiveLoadingEnabled: newExercise.progressiveLoadingEnabled,
+        progressionIncrement: newExercise.progressionIncrement,
+        currentWeight: newExercise.currentWeight,
+        orderIndex: newExercise.orderIndex,
+      });
+
       return newExercise;
     } catch (error) {
       set({
@@ -303,6 +345,9 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
         }
         return { isLoading: false };
       });
+
+      // Queue for sync
+      await syncEngine.queueUpdate('exercise', id, updates);
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to update exercise',
@@ -332,6 +377,9 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
         }
         return { isLoading: false };
       });
+
+      // Queue for sync
+      await syncEngine.queueDelete('exercise', id);
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to delete exercise',
