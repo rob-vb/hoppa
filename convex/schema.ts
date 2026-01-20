@@ -60,6 +60,7 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"])
+    .index("by_user_completed", ["userId", "completedAt"])
     .index("by_day", ["dayId"])
     .index("by_day_status", ["dayId", "status"]),
 
@@ -75,7 +76,9 @@ export default defineSchema({
     microplateUsed: v.number(),
     totalWeight: v.number(),
     progressionEarned: v.boolean(),
-  }).index("by_session", ["sessionId"]),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_exercise", ["exerciseId"]),
 
   // Set Log - log of a single set within an exercise
   setLogs: defineTable({
