@@ -123,3 +123,31 @@ export const skip = mutation({
     await ctx.db.patch(args.id, { status: "skipped" });
   },
 });
+
+// Create an exercise log directly (for sync - doesn't auto-create set logs)
+export const createDirect = mutation({
+  args: {
+    sessionId: v.id("workoutSessions"),
+    exerciseId: v.id("exercises"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("skipped")
+    ),
+    microplateUsed: v.number(),
+    totalWeight: v.number(),
+    progressionEarned: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const exerciseLogId = await ctx.db.insert("exerciseLogs", {
+      sessionId: args.sessionId,
+      exerciseId: args.exerciseId,
+      status: args.status,
+      microplateUsed: args.microplateUsed,
+      totalWeight: args.totalWeight,
+      progressionEarned: args.progressionEarned,
+    });
+
+    return exerciseLogId;
+  },
+});

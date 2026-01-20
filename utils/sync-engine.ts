@@ -785,61 +785,178 @@ export class SyncEngine {
     let pushed = 0;
 
     try {
-      // Get all local schemas without mappings
-      const schemas = await db.getSchemas();
+      // Phase 1: Push all schemas, days, and exercises
+      const schemaResult = await this.pushSchemasWithDaysAndExercises();
+      pushed += schemaResult.pushed;
+      errors.push(...schemaResult.errors);
 
-      for (const schema of schemas) {
-        if (!this.idMap.has(schema.id)) {
+      // Phase 2: Push all workout sessions with logs
+      const sessionResult = await this.pushWorkoutSessionsWithLogs();
+      pushed += sessionResult.pushed;
+      errors.push(...sessionResult.errors);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Push all failed';
+      errors.push(message);
+    }
+
+    return { pushed, errors };
+  }
+
+  private async pushSchemasWithDaysAndExercises(): Promise<{ pushed: number; errors: string[] }> {
+    if (!this.client || !this.userId) {
+      return { pushed: 0, errors: ['Not initialized'] };
+    }
+
+    const errors: string[] = [];
+    let pushed = 0;
+
+    // Get all local schemas without mappings
+    const schemas = await db.getSchemas();
+
+    for (const schema of schemas) {
+      if (!this.idMap.has(schema.id)) {
+        try {
+          // Create schema in Convex
+          const convexId = await this.client.mutation(api.schemas.create, {
+            name: schema.name,
+            progressiveLoadingEnabled: schema.progressiveLoadingEnabled,
+          });
+          await this.idMap.set(schema.id, convexId, 'schema');
+          pushed++;
+
+          // Push workout days
+          const schemaWithDays = await db.getSchemaWithDays(schema.id);
+          if (schemaWithDays) {
+            for (const day of schemaWithDays.days) {
+              const dayConvexId = await this.client.mutation(api.workoutDays.create, {
+                schemaId: convexId as Id<'schemas'>,
+                name: day.name,
+                orderIndex: day.orderIndex,
+              });
+              await this.idMap.set(day.id, dayConvexId, 'workoutDay');
+              pushed++;
+
+              // Push exercises
+              for (const exercise of day.exercises) {
+                const exerciseConvexId = await this.client.mutation(api.exercises.create, {
+                  dayId: dayConvexId as Id<'workoutDays'>,
+                  name: exercise.name,
+                  equipmentType: exercise.equipmentType,
+                  baseWeight: exercise.baseWeight,
+                  targetSets: exercise.targetSets,
+                  targetRepsMin: exercise.targetRepsMin,
+                  targetRepsMax: exercise.targetRepsMax,
+                  progressiveLoadingEnabled: exercise.progressiveLoadingEnabled,
+                  progressionIncrement: exercise.progressionIncrement,
+                  currentWeight: exercise.currentWeight,
+                  orderIndex: exercise.orderIndex,
+                });
+                await this.idMap.set(exercise.id, exerciseConvexId, 'exercise');
+                pushed++;
+              }
+            }
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Push failed';
+          errors.push(`Schema ${schema.name}: ${message}`);
+        }
+      }
+    }
+
+    return { pushed, errors };
+  }
+
+  private async pushWorkoutSessionsWithLogs(): Promise<{ pushed: number; errors: string[] }> {
+    if (!this.client || !this.userId) {
+      return { pushed: 0, errors: ['Not initialized'] };
+    }
+
+    const errors: string[] = [];
+    let pushed = 0;
+
+    // Get all local workout sessions
+    const sessions = await db.getWorkoutSessions();
+
+    for (const session of sessions) {
+      // Skip if already synced
+      if (this.idMap.has(session.id)) {
+        continue;
+      }
+
+      // Check if parent schema and day have been synced
+      const schemaConvexId = this.idMap.getConvexId(session.schemaId);
+      const dayConvexId = this.idMap.getConvexId(session.dayId);
+
+      if (!schemaConvexId || !dayConvexId) {
+        errors.push(`Session ${session.id}: Parent schema or day not synced`);
+        continue;
+      }
+
+      try {
+        // Create session using createDirect mutation (doesn't auto-create logs)
+        const sessionConvexId = await this.client.mutation(api.workoutSessions.createDirect, {
+          userId: this.userId,
+          schemaId: schemaConvexId as Id<'schemas'>,
+          dayId: dayConvexId as Id<'workoutDays'>,
+          startedAt: session.startedAt,
+          completedAt: session.completedAt ?? undefined,
+          status: session.status,
+        });
+        await this.idMap.set(session.id, sessionConvexId, 'workoutSession');
+        pushed++;
+
+        // Push exercise logs for this session
+        const exerciseLogs = await db.getExerciseLogsBySession(session.id);
+
+        for (const exerciseLog of exerciseLogs) {
+          // Get the Convex ID for the exercise
+          const exerciseConvexId = this.idMap.getConvexId(exerciseLog.exerciseId);
+
+          if (!exerciseConvexId) {
+            errors.push(`ExerciseLog ${exerciseLog.id}: Parent exercise not synced`);
+            continue;
+          }
+
           try {
-            // Create schema in Convex
-            const convexId = await this.client.mutation(api.schemas.create, {
-              name: schema.name,
-              progressiveLoadingEnabled: schema.progressiveLoadingEnabled,
+            // Create exercise log using createDirect mutation
+            const exerciseLogConvexId = await this.client.mutation(api.exerciseLogs.createDirect, {
+              sessionId: sessionConvexId as Id<'workoutSessions'>,
+              exerciseId: exerciseConvexId as Id<'exercises'>,
+              status: exerciseLog.status,
+              microplateUsed: exerciseLog.microplateUsed,
+              totalWeight: exerciseLog.totalWeight,
+              progressionEarned: exerciseLog.progressionEarned,
             });
-            await this.idMap.set(schema.id, convexId, 'schema');
+            await this.idMap.set(exerciseLog.id, exerciseLogConvexId, 'exerciseLog');
             pushed++;
 
-            // Push workout days
-            const schemaWithDays = await db.getSchemaWithDays(schema.id);
-            if (schemaWithDays) {
-              for (const day of schemaWithDays.days) {
-                const dayConvexId = await this.client.mutation(api.workoutDays.create, {
-                  schemaId: convexId as Id<'schemas'>,
-                  name: day.name,
-                  orderIndex: day.orderIndex,
-                });
-                await this.idMap.set(day.id, dayConvexId, 'workoutDay');
-                pushed++;
+            // Push set logs for this exercise log
+            const setLogs = await db.getSetLogsByExerciseLog(exerciseLog.id);
 
-                // Push exercises
-                for (const exercise of day.exercises) {
-                  const exerciseConvexId = await this.client.mutation(api.exercises.create, {
-                    dayId: dayConvexId as Id<'workoutDays'>,
-                    name: exercise.name,
-                    equipmentType: exercise.equipmentType,
-                    baseWeight: exercise.baseWeight,
-                    targetSets: exercise.targetSets,
-                    targetRepsMin: exercise.targetRepsMin,
-                    targetRepsMax: exercise.targetRepsMax,
-                    progressiveLoadingEnabled: exercise.progressiveLoadingEnabled,
-                    progressionIncrement: exercise.progressionIncrement,
-                    currentWeight: exercise.currentWeight,
-                    orderIndex: exercise.orderIndex,
-                  });
-                  await this.idMap.set(exercise.id, exerciseConvexId, 'exercise');
-                  pushed++;
-                }
+            for (const setLog of setLogs) {
+              try {
+                const setLogConvexId = await this.client.mutation(api.setLogs.createDirect, {
+                  exerciseLogId: exerciseLogConvexId as Id<'exerciseLogs'>,
+                  setNumber: setLog.setNumber,
+                  targetReps: setLog.targetReps,
+                  completedReps: setLog.completedReps ?? undefined,
+                });
+                await this.idMap.set(setLog.id, setLogConvexId, 'setLog');
+                pushed++;
+              } catch (error) {
+                const message = error instanceof Error ? error.message : 'Push failed';
+                errors.push(`SetLog ${setLog.id}: ${message}`);
               }
             }
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Push failed';
-            errors.push(`Schema ${schema.name}: ${message}`);
+            errors.push(`ExerciseLog ${exerciseLog.id}: ${message}`);
           }
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Push failed';
+        errors.push(`Session ${session.id}: ${message}`);
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Push all failed';
-      errors.push(message);
     }
 
     return { pushed, errors };

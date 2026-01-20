@@ -205,3 +205,27 @@ export const abandon = mutation({
     await ctx.db.delete(args.id);
   },
 });
+
+// Create a workout session directly (for sync - doesn't auto-create logs)
+export const createDirect = mutation({
+  args: {
+    userId: v.id("users"),
+    schemaId: v.id("schemas"),
+    dayId: v.id("workoutDays"),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    status: v.union(v.literal("in_progress"), v.literal("completed")),
+  },
+  handler: async (ctx, args) => {
+    const sessionId = await ctx.db.insert("workoutSessions", {
+      userId: args.userId,
+      schemaId: args.schemaId,
+      dayId: args.dayId,
+      startedAt: args.startedAt,
+      completedAt: args.completedAt,
+      status: args.status,
+    });
+
+    return sessionId;
+  },
+});

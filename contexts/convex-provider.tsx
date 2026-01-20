@@ -1,6 +1,6 @@
 import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
-import { ReactNode } from "react";
+import { ReactNode, createContext, useContext } from "react";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
@@ -13,6 +13,18 @@ if (!convexUrl) {
 }
 
 const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
+
+// Export the client for sync engine use
+export function getConvexClient(): ConvexReactClient | null {
+  return convex;
+}
+
+// Context for accessing the Convex client in components
+const ConvexClientContext = createContext<ConvexReactClient | null>(null);
+
+export function useConvexClient(): ConvexReactClient | null {
+  return useContext(ConvexClientContext);
+}
 
 // Cross-platform secure storage for auth tokens
 const secureStorage = {
@@ -50,7 +62,9 @@ export function ConvexClientProvider({ children }: ConvexClientProviderProps) {
 
   return (
     <ConvexAuthProvider client={convex} storage={secureStorage}>
-      {children}
+      <ConvexClientContext.Provider value={convex}>
+        {children}
+      </ConvexClientContext.Provider>
     </ConvexAuthProvider>
   );
 }

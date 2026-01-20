@@ -59,3 +59,23 @@ export const batchLogReps = mutation({
     }
   },
 });
+
+// Create a set log directly (for sync)
+export const createDirect = mutation({
+  args: {
+    exerciseLogId: v.id("exerciseLogs"),
+    setNumber: v.number(),
+    targetReps: v.string(),
+    completedReps: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const setLogId = await ctx.db.insert("setLogs", {
+      exerciseLogId: args.exerciseLogId,
+      setNumber: args.setNumber,
+      targetReps: args.targetReps,
+      completedReps: args.completedReps,
+    });
+
+    return setLogId;
+  },
+});
