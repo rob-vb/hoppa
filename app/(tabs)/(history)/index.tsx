@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -19,6 +20,7 @@ interface SessionWithDetails {
 }
 
 export default function HistoryScreen() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<SessionWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +145,7 @@ export default function HistoryScreen() {
                     exerciseCount={item.exerciseCount}
                     completedCount={item.completedCount}
                     totalReps={item.totalReps}
+                    onPress={() => router.push(`/(history)/${item.session.id}`)}
                   />
                 ))}
               </View>

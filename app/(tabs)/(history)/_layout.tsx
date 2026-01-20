@@ -22,6 +22,12 @@ export default function HistoryLayout() {
           title: 'History',
         }}
       />
+      <Stack.Screen
+        name="[sessionId]"
+        options={{
+          title: 'Workout Details',
+        }}
+      />
     </Stack>
   );
 }
