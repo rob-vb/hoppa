@@ -1,9 +1,16 @@
 # Product Requirements Document
 ## Hoppa
 
-**Version:** 1.0 (MVP)  
-**Date:** January 2025  
+**Version:** 1.0 (MVP)
+**Date:** January 2025
 **Status:** Draft
+
+---
+
+## Tasks
+- [ ] Create auth
+- [ ] Add dashboard
+- [x] Done task (skipped)
 
 ---
 
