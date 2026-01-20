@@ -27,10 +27,12 @@ export default function HistoryScreen() {
     setIsLoading(true);
     setError(null);
     try {
-      // Get all completed workout sessions
-      const allSessions = await db.getWorkoutSessions();
-      const completedSessions = allSessions.filter(
-        (s) => s.status === 'completed'
+      // Get completed workout sessions from the last 30 days
+      const now = Date.now();
+      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+      const completedSessions = await db.getCompletedSessionsInDateRange(
+        thirtyDaysAgo,
+        now
       );
 
       const sessionsWithDetails: SessionWithDetails[] = [];
@@ -121,7 +123,7 @@ export default function HistoryScreen() {
         {sessions.length === 0 ? (
           <View style={styles.placeholder}>
             <ThemedText style={styles.placeholderText}>
-              No workouts completed yet
+              No workouts in the last 30 days
             </ThemedText>
             <ThemedText style={styles.placeholderSubtext}>
               Complete a workout to see it here
