@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 import { ConvexClientProvider } from '@/contexts/convex-provider';
+import { SyncProvider } from '@/contexts/sync-provider';
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -50,10 +51,12 @@ export default function RootLayout() {
   return (
     <ConvexClientProvider>
       <AuthProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <RootLayoutNav />
-          <StatusBar style="auto" />
-        </ThemeProvider>
+        <SyncProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <RootLayoutNav />
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </SyncProvider>
       </AuthProvider>
     </ConvexClientProvider>
   );

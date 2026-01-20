@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as Network from 'expo-network';
+import { AppState, AppStateStatus } from 'react-native';
 import { syncEngine, SyncState, SyncResult } from '@/utils/sync-engine';
 import { useAuth } from '@/contexts/auth-context';
 import { useConvexClient } from '@/contexts/convex-provider';
@@ -32,6 +33,7 @@ export interface UseOfflineQueueReturn extends OfflineQueueState {
  * This hook:
  * - Monitors network connectivity status
  * - Automatically syncs pending changes when coming back online
+ * - Syncs when app returns from background (if there are pending changes)
  * - Provides methods to manually trigger sync
  * - Tracks pending operation count
  */
@@ -48,6 +50,12 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
 
   const wasOfflineRef = useRef(false);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSyncingRef = useRef(false);
+
+  // Keep isSyncingRef in sync with state
+  useEffect(() => {
+    isSyncingRef.current = isSyncing;
+  }, [isSyncing]);
 
   // Subscribe to sync engine state changes
   useEffect(() => {
@@ -58,6 +66,56 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
     return unsubscribe;
   }, []);
 
+  // Internal sync function with debouncing - uses refs to avoid stale closures
+  const performSync = useCallback(async () => {
+    if (!isAuthenticated || !user || !client) {
+      console.log('[OfflineQueue] Cannot sync: not authenticated');
+      return;
+    }
+
+    if (isSyncingRef.current) {
+      console.log('[OfflineQueue] Sync already in progress, skipping');
+      return;
+    }
+
+    // Clear any pending debounced sync
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+      syncTimeoutRef.current = null;
+    }
+
+    // Debounce: wait 500ms before actually syncing
+    syncTimeoutRef.current = setTimeout(async () => {
+      if (isSyncingRef.current) {
+        return;
+      }
+
+      setIsSyncing(true);
+      setError(null);
+      console.log('[OfflineQueue] Starting sync...');
+
+      try {
+        const result = await syncEngine.sync();
+        setLastSyncResult(result);
+
+        if (result.success) {
+          console.log(
+            `[OfflineQueue] Sync completed: pushed ${result.pushed}, pulled ${result.pulled}`
+          );
+        } else {
+          console.log('[OfflineQueue] Sync completed with errors:', result.errors);
+          setError(result.errors.join('; '));
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Sync failed';
+        console.error('[OfflineQueue] Sync failed:', message);
+        setError(message);
+      } finally {
+        setIsSyncing(false);
+      }
+    }, 500);
+  }, [isAuthenticated, user, client]);
+
   // Monitor network connectivity
   useEffect(() => {
     let mounted = true;
@@ -65,17 +123,17 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
     const checkNetworkState = async () => {
       try {
         const state = await Network.getNetworkStateAsync();
-        if (mounted) {
-          const online = state.isConnected ?? false;
-          setIsOnline(online);
+        if (!mounted) return;
 
-          // If we were offline and now online, trigger sync
-          if (wasOfflineRef.current && online) {
-            console.log('[OfflineQueue] Back online, triggering sync...');
-            triggerSyncInternal();
-          }
-          wasOfflineRef.current = !online;
+        const online = state.isConnected ?? false;
+        setIsOnline(online);
+
+        // If we were offline and now online, trigger sync
+        if (wasOfflineRef.current && online) {
+          console.log('[OfflineQueue] Network restored, triggering sync...');
+          performSync();
         }
+        wasOfflineRef.current = !online;
       } catch (err) {
         console.warn('[OfflineQueue] Failed to get network state:', err);
         // Assume online if we can't determine
@@ -98,42 +156,31 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
         clearTimeout(syncTimeoutRef.current);
       }
     };
-  }, []);
+  }, [performSync]);
 
-  // Internal sync function with debouncing
-  const triggerSyncInternal = useCallback(async () => {
-    if (!isAuthenticated || !user || !client) {
-      return;
-    }
+  // Monitor app state changes - sync when returning from background
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        // App came to foreground - check if we're online and have pending changes
+        try {
+          const state = await Network.getNetworkStateAsync();
+          const online = state.isConnected ?? false;
+          setIsOnline(online);
 
-    if (isSyncing) {
-      return;
-    }
-
-    // Debounce sync calls
-    if (syncTimeoutRef.current) {
-      clearTimeout(syncTimeoutRef.current);
-    }
-
-    syncTimeoutRef.current = setTimeout(async () => {
-      setIsSyncing(true);
-      setError(null);
-
-      try {
-        const result = await syncEngine.sync();
-        setLastSyncResult(result);
-
-        if (!result.success && result.errors.length > 0) {
-          setError(result.errors.join('; '));
+          if (online && syncEngine.hasPendingChanges()) {
+            console.log('[OfflineQueue] App foregrounded with pending changes, triggering sync...');
+            performSync();
+          }
+        } catch (err) {
+          console.warn('[OfflineQueue] Failed to check network on foreground:', err);
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Sync failed';
-        setError(message);
-      } finally {
-        setIsSyncing(false);
       }
-    }, 500);
-  }, [isAuthenticated, user, client, isSyncing]);
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [performSync]);
 
   // Public sync trigger
   const triggerSync = useCallback(async (): Promise<SyncResult> => {
