@@ -221,25 +221,37 @@ export default function ActiveWorkoutScreen() {
           <IconSymbol name="xmark" size={24} color={Colors.dark.text} />
         </Pressable>
 
-        <View style={styles.headerCenter}>
-          <ThemedText style={styles.headerProgress}>
-            Exercise {currentExerciseIndex + 1} of {totalExercises}
-          </ThemedText>
-        </View>
-
         <Pressable onPress={handleCancelWorkout} hitSlop={12}>
           <ThemedText style={styles.cancelText}>Cancel</ThemedText>
         </Pressable>
       </View>
 
-      {/* Progress Bar */}
-      <View style={styles.progressBarContainer}>
-        <View
-          style={[
-            styles.progressBar,
-            { width: `${(completedExercises / totalExercises) * 100}%` },
-          ]}
-        />
+      {/* Progress Indicator */}
+      <View style={styles.progressSection}>
+        <View style={styles.progressTextRow}>
+          <ThemedText style={styles.progressLabel}>
+            Exercise {currentExerciseIndex + 1} of {totalExercises}
+          </ThemedText>
+          <ThemedText style={styles.progressCompleted}>
+            {completedExercises} completed
+          </ThemedText>
+        </View>
+        <View style={styles.progressBarContainer}>
+          {/* Background segments for each exercise */}
+          <View style={styles.progressBarBackground}>
+            {exerciseLogs.map((log, index) => (
+              <View
+                key={log.id}
+                style={[
+                  styles.progressSegment,
+                  index === currentExerciseIndex && styles.progressSegmentCurrent,
+                  (log.status === 'completed' || log.status === 'skipped') &&
+                    styles.progressSegmentCompleted,
+                ]}
+              />
+            ))}
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -445,29 +457,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerProgress: {
-    fontSize: 14,
-    color: Colors.dark.textSecondary,
-  },
   cancelText: {
     fontSize: 14,
     color: Colors.dark.error,
   },
+  progressSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  progressTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  progressLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  progressCompleted: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+  },
   progressBarContainer: {
-    height: 3,
-    backgroundColor: Colors.dark.surface,
-    marginHorizontal: 16,
-    borderRadius: 2,
+    height: 6,
+    borderRadius: 3,
     overflow: 'hidden',
   },
-  progressBar: {
+  progressBarBackground: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 3,
+  },
+  progressSegment: {
+    flex: 1,
     height: '100%',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 3,
+  },
+  progressSegmentCurrent: {
     backgroundColor: Colors.dark.primary,
-    borderRadius: 2,
+  },
+  progressSegmentCompleted: {
+    backgroundColor: '#22C55E',
   },
   scrollView: {
     flex: 1,
