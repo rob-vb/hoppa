@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  LayoutChangeEvent,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -45,17 +46,39 @@ export default function ActiveWorkoutScreen() {
   } = useWorkoutStore();
 
   const currentExerciseLog = getCurrentExerciseLog();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const setPositions = useRef<Record<string, number>>({});
 
   const handleRepSelect = useCallback(
-    async (reps: number, setId: string) => {
+    async (reps: number, setId: string, setIndex: number) => {
       if (Platform.OS === 'ios') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
 
       await logReps(setId, reps);
+
+      // Auto-advance to next set
+      if (currentExerciseLog) {
+        const sets = currentExerciseLog.sets;
+        const nextSetIndex = setIndex + 1;
+
+        if (nextSetIndex < sets.length) {
+          const nextSet = sets[nextSetIndex];
+          const nextSetY = setPositions.current[nextSet.id];
+
+          if (nextSetY !== undefined && scrollViewRef.current) {
+            // Scroll to make the next set visible with some padding
+            scrollViewRef.current.scrollTo({ y: nextSetY - 100, animated: true });
+          }
+        }
+      }
     },
-    [logReps]
+    [logReps, currentExerciseLog]
   );
+
+  const handleSetLayout = useCallback((setId: string, event: LayoutChangeEvent) => {
+    setPositions.current[setId] = event.nativeEvent.layout.y;
+  }, []);
 
   const handleClearReps = useCallback(
     async (setId: string) => {
@@ -220,6 +243,7 @@ export default function ActiveWorkoutScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -238,15 +262,19 @@ export default function ActiveWorkoutScreen() {
         {!isCurrentExerciseComplete && (
           <View style={styles.repInputSection}>
             {sets.map((set, index) => (
-              <RepInput
+              <View
                 key={set.id}
-                setNumber={index + 1}
-                targetReps={`${exercise.targetRepsMin}-${exercise.targetRepsMax}`}
-                completedReps={set.completedReps}
-                onLogReps={(reps) => handleRepSelect(reps, set.id)}
-                onClearReps={() => handleClearReps(set.id)}
-                disabled={isCurrentExerciseComplete}
-              />
+                onLayout={(e) => handleSetLayout(set.id, e)}
+              >
+                <RepInput
+                  setNumber={index + 1}
+                  targetReps={`${exercise.targetRepsMin}-${exercise.targetRepsMax}`}
+                  completedReps={set.completedReps}
+                  onLogReps={(reps) => handleRepSelect(reps, set.id, index)}
+                  onClearReps={() => handleClearReps(set.id)}
+                  disabled={isCurrentExerciseComplete}
+                />
+              </View>
             ))}
           </View>
         )}
