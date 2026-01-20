@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -48,6 +48,34 @@ export default function ActiveWorkoutScreen() {
   const currentExerciseLog = getCurrentExerciseLog();
   const scrollViewRef = useRef<ScrollView>(null);
   const setPositions = useRef<Record<string, number>>({});
+
+  // Workout timer
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!session) return;
+
+    // Calculate initial elapsed time
+    const calculateElapsed = () => Math.floor((Date.now() - session.startedAt) / 1000);
+    setElapsedSeconds(calculateElapsed());
+
+    const interval = setInterval(() => {
+      setElapsedSeconds(calculateElapsed());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [session]);
+
+  const formatTime = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   const handleRepSelect = useCallback(
     async (reps: number, setId: string, setIndex: number) => {
@@ -220,6 +248,11 @@ export default function ActiveWorkoutScreen() {
         <Pressable onPress={handleClose} hitSlop={12}>
           <IconSymbol name="xmark" size={24} color={Colors.dark.text} />
         </Pressable>
+
+        <View style={styles.timerContainer}>
+          <IconSymbol name="timer" size={16} color={Colors.dark.textSecondary} />
+          <ThemedText style={styles.timerText}>{formatTime(elapsedSeconds)}</ThemedText>
+        </View>
 
         <Pressable onPress={handleCancelWorkout} hitSlop={12}>
           <ThemedText style={styles.cancelText}>Cancel</ThemedText>
@@ -460,6 +493,17 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 14,
     color: Colors.dark.error,
+  },
+  timerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  timerText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    color: Colors.dark.text,
   },
   progressSection: {
     paddingHorizontal: 16,
