@@ -32,12 +32,12 @@
 - [x] Add progressive loading toggles (schema-level and exercise-level)
 - [x] Add progression increment selector (2.5kg/5kg/custom)
 - [x] Build schema details/edit screen `(schemas)/[id].tsx`
-- [ ] Build schema card component for list view
+- [x] Build schema card component for list view
 
 #### AI Schema Import (1 week)
-- [ ] Set up Claude API integration
-- [ ] Build image picker flow (camera/gallery)
-- [ ] Create AI prompt for schema extraction
+- [x] Set up Claude API integration
+- [x] Build image picker flow (camera/gallery)
+- [x] Create AI prompt for schema extraction
 - [ ] Parse AI response into schema structure
 - [ ] Build review/edit screen for extracted schema
 - [ ] Add rate limiting (3 imports/month for free tier)
