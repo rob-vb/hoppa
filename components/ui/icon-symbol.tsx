@@ -19,6 +19,19 @@ const MAPPING = {
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
   'chart.bar.fill': 'bar-chart',
+  // Error and status icons
+  'wifi.slash': 'wifi-off',
+  'exclamationmark.icloud': 'cloud-off',
+  'clock.badge.exclamationmark': 'schedule',
+  'key.slash': 'vpn-key-off',
+  'camera.badge.ellipsis': 'photo-camera',
+  'doc.text.magnifyingglass': 'find-in-page',
+  'exclamationmark.triangle': 'warning',
+  'exclamationmark.triangle.fill': 'warning',
+  'doc.questionmark': 'help-outline',
+  'exclamationmark.circle': 'error-outline',
+  // Confidence icons
+  'checkmark.seal.fill': 'verified',
 } as IconMapping;
 
 /**

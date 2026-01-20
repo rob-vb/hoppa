@@ -21,6 +21,19 @@ import { Colors } from '@/constants/theme';
 import type { ImagePickerResult } from '@/hooks/use-image-picker';
 import type { ClaudeImageSource } from '@/services/claude-api';
 
+// Error icon mapping for different error types
+const ERROR_ICONS = {
+  network: 'wifi.slash',
+  api_error: 'exclamationmark.icloud',
+  rate_limit: 'clock.badge.exclamationmark',
+  api_not_configured: 'key.slash',
+  unclear_image: 'camera.badge.ellipsis',
+  no_workout_detected: 'doc.text.magnifyingglass',
+  partial_extraction: 'exclamationmark.triangle',
+  parse_error: 'doc.questionmark',
+  unknown: 'exclamationmark.circle',
+} as const;
+
 export default function AIImportScreen() {
   const router = useRouter();
   const {
@@ -191,9 +204,32 @@ export default function AIImportScreen() {
         </View>
 
         {extractionError && (
-          <View style={styles.errorContainer}>
-            <ThemedText style={styles.errorText}>{extractionError}</ThemedText>
-          </View>
+          <Card style={styles.errorCard}>
+            <View style={styles.errorHeader}>
+              <View style={styles.errorIconContainer}>
+                <IconSymbol
+                  name={ERROR_ICONS[extractionError.type] || 'exclamationmark.circle'}
+                  size={24}
+                  color={Colors.dark.error}
+                />
+              </View>
+              <View style={styles.errorTextContainer}>
+                <ThemedText style={styles.errorTitle}>{extractionError.message}</ThemedText>
+                {extractionError.details && (
+                  <ThemedText style={styles.errorDetails}>{extractionError.details}</ThemedText>
+                )}
+              </View>
+            </View>
+            {extractionError.isRetryable && selectedImage && (
+              <Button
+                title="Try Again"
+                variant="secondary"
+                onPress={handleExtract}
+                disabled={isExtracting}
+                fullWidth
+              />
+            )}
+          </Card>
         )}
 
         {isExtracting && (
@@ -358,16 +394,38 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
   },
-  errorContainer: {
-    backgroundColor: Colors.dark.error + '20',
-    borderRadius: 8,
-    padding: 12,
+  errorCard: {
     marginBottom: 16,
+    borderColor: Colors.dark.error,
+    borderWidth: 1,
+    gap: 16,
   },
-  errorText: {
+  errorHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  errorIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.dark.error + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorTextContainer: {
+    flex: 1,
+    gap: 4,
+  },
+  errorTitle: {
     color: Colors.dark.error,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorDetails: {
+    color: Colors.dark.textSecondary,
     fontSize: 14,
-    textAlign: 'center',
+    lineHeight: 20,
   },
   loadingCard: {
     alignItems: 'center',

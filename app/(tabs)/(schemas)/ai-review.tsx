@@ -29,6 +29,28 @@ import {
   type LocalWorkoutDay,
 } from '@/services/schema-parser';
 
+// Confidence level display config
+const CONFIDENCE_CONFIG = {
+  high: {
+    label: 'High Confidence',
+    color: '#22C55E',
+    icon: 'checkmark.seal.fill',
+    description: 'The AI was able to clearly read and extract your workout plan.',
+  },
+  medium: {
+    label: 'Medium Confidence',
+    color: '#F59E0B',
+    icon: 'exclamationmark.triangle',
+    description: 'Some parts were unclear. Please review all exercises carefully.',
+  },
+  low: {
+    label: 'Low Confidence',
+    color: Colors.dark.error,
+    icon: 'exclamationmark.triangle.fill',
+    description: 'The image was difficult to read. Review and correct all fields.',
+  },
+} as const;
+
 const EQUIPMENT_TYPES: { value: EquipmentType; label: string }[] = [
   { value: 'plates', label: 'Barbell/Plates' },
   { value: 'machine', label: 'Machine' },
@@ -67,7 +89,12 @@ export default function AIReviewScreen() {
   const params = useLocalSearchParams<{ warnings?: string }>();
   const { createSchema, addWorkoutDay, addExercise, isLoading, error, clearError } =
     useSchemaStore();
-  const { extractedSchema, clearExtractedSchema } = useAIImportStore();
+  const {
+    extractedSchema,
+    extractionConfidence,
+    extractionWarnings: storeWarnings,
+    clearExtractedSchema,
+  } = useAIImportStore();
 
   const [schemaName, setSchemaName] = useState('');
   const [progressiveLoadingEnabled, setProgressiveLoadingEnabled] = useState(true);
@@ -83,9 +110,13 @@ export default function AIReviewScreen() {
       if (result.success) {
         setSchemaName(result.schemaName);
         setDays(result.days);
-        if (result.warnings) {
-          setWarnings(result.warnings);
-        }
+        // Combine warnings from conversion and from store
+        const allWarnings = [
+          ...(result.warnings || []),
+          ...storeWarnings,
+        ];
+        // Remove duplicates
+        setWarnings([...new Set(allWarnings)]);
       }
     }
     // Parse warnings from URL params if present
@@ -93,13 +124,13 @@ export default function AIReviewScreen() {
       try {
         const parsedWarnings = JSON.parse(params.warnings);
         if (Array.isArray(parsedWarnings)) {
-          setWarnings(parsedWarnings);
+          setWarnings((prev) => [...new Set([...prev, ...parsedWarnings])]);
         }
       } catch {
         // Ignore parse errors
       }
     }
-  }, [extractedSchema, params.warnings]);
+  }, [extractedSchema, params.warnings, storeWarnings]);
 
   // Redirect if no extracted schema
   useEffect(() => {
@@ -661,6 +692,34 @@ export default function AIReviewScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {extractionConfidence && (
+            <View
+              style={[
+                styles.confidenceBanner,
+                { borderColor: CONFIDENCE_CONFIG[extractionConfidence].color },
+              ]}
+            >
+              <View style={styles.confidenceHeader}>
+                <IconSymbol
+                  name={CONFIDENCE_CONFIG[extractionConfidence].icon}
+                  size={20}
+                  color={CONFIDENCE_CONFIG[extractionConfidence].color}
+                />
+                <ThemedText
+                  style={[
+                    styles.confidenceLabel,
+                    { color: CONFIDENCE_CONFIG[extractionConfidence].color },
+                  ]}
+                >
+                  {CONFIDENCE_CONFIG[extractionConfidence].label}
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.confidenceDescription}>
+                {CONFIDENCE_CONFIG[extractionConfidence].description}
+              </ThemedText>
+            </View>
+          )}
+
           {warnings.length > 0 && (
             <View style={styles.warningsContainer}>
               <View style={styles.warningsHeader}>
@@ -771,6 +830,28 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
+  },
+  confidenceBanner: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    backgroundColor: Colors.dark.surface,
+    gap: 8,
+  },
+  confidenceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  confidenceLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confidenceDescription: {
+    fontSize: 14,
+    color: Colors.dark.textSecondary,
+    lineHeight: 20,
   },
   warningsContainer: {
     backgroundColor: '#F59E0B20',

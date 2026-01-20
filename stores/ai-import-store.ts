@@ -17,10 +17,31 @@ interface ImportData {
   monthYear: string; // Format: "2024-01"
 }
 
+// Error types for better categorization
+export type ExtractionErrorType =
+  | 'network'
+  | 'api_error'
+  | 'rate_limit'
+  | 'api_not_configured'
+  | 'unclear_image'
+  | 'no_workout_detected'
+  | 'partial_extraction'
+  | 'parse_error'
+  | 'unknown';
+
+export interface ExtractionError {
+  type: ExtractionErrorType;
+  message: string;
+  details?: string;
+  isRetryable: boolean;
+}
+
 interface AIImportState {
   // Extraction state
   extractedSchema: ExtractedSchema | null;
-  extractionError: string | null;
+  extractionError: ExtractionError | null;
+  extractionConfidence: 'high' | 'medium' | 'low' | null;
+  extractionWarnings: string[];
   isExtracting: boolean;
 
   // Rate limiting
@@ -76,10 +97,104 @@ async function saveImportData(data: ImportData): Promise<void> {
   }
 }
 
+// Helper to categorize errors from API responses
+function categorizeError(errorMessage: string, details?: string): ExtractionError {
+  const lowerMessage = errorMessage.toLowerCase();
+  const lowerDetails = (details || '').toLowerCase();
+
+  // Network errors
+  if (
+    lowerMessage.includes('network') ||
+    lowerMessage.includes('fetch') ||
+    lowerMessage.includes('timeout') ||
+    lowerMessage.includes('connection') ||
+    lowerDetails.includes('network')
+  ) {
+    return {
+      type: 'network',
+      message: 'Unable to connect',
+      details: 'Check your internet connection and try again.',
+      isRetryable: true,
+    };
+  }
+
+  // API errors (rate limits, auth, server errors)
+  if (
+    lowerMessage.includes('api error') ||
+    lowerMessage.includes('401') ||
+    lowerMessage.includes('403') ||
+    lowerMessage.includes('500') ||
+    lowerMessage.includes('503')
+  ) {
+    return {
+      type: 'api_error',
+      message: 'Service temporarily unavailable',
+      details: 'Please try again in a moment.',
+      isRetryable: true,
+    };
+  }
+
+  // Unclear/blurry image
+  if (
+    lowerMessage.includes('blurry') ||
+    lowerMessage.includes('unclear') ||
+    lowerMessage.includes('cannot read') ||
+    lowerDetails.includes('blurry') ||
+    lowerDetails.includes('quality')
+  ) {
+    return {
+      type: 'unclear_image',
+      message: 'Image is unclear',
+      details: 'Please take a clearer photo with better lighting.',
+      isRetryable: true,
+    };
+  }
+
+  // No workout detected
+  if (
+    lowerMessage.includes('no workout') ||
+    lowerMessage.includes('not a workout') ||
+    lowerMessage.includes('no exercises') ||
+    lowerDetails.includes('no workout')
+  ) {
+    return {
+      type: 'no_workout_detected',
+      message: 'No workout plan detected',
+      details: 'Make sure the image contains a workout plan with exercises, sets, and reps.',
+      isRetryable: true,
+    };
+  }
+
+  // Parse errors
+  if (
+    lowerMessage.includes('invalid') ||
+    lowerMessage.includes('parse') ||
+    lowerMessage.includes('json') ||
+    lowerMessage.includes('format')
+  ) {
+    return {
+      type: 'parse_error',
+      message: 'Could not process the image',
+      details: 'The AI had trouble understanding this format. Try a different image.',
+      isRetryable: true,
+    };
+  }
+
+  // Default unknown error
+  return {
+    type: 'unknown',
+    message: errorMessage,
+    details: details || 'An unexpected error occurred. Please try again.',
+    isRetryable: true,
+  };
+}
+
 export const useAIImportStore = create<AIImportStore>((set, get) => ({
   // Initial state
   extractedSchema: null,
   extractionError: null,
+  extractionConfidence: null,
+  extractionWarnings: [],
   isExtracting: false,
   importsThisMonth: 0,
   monthlyLimit: FREE_TIER_MONTHLY_LIMIT,
@@ -97,7 +212,14 @@ export const useAIImportStore = create<AIImportStore>((set, get) => ({
         error: 'Monthly import limit reached',
         details: `You have used all ${FREE_TIER_MONTHLY_LIMIT} AI imports for this month. Limit resets next month.`,
       };
-      set({ extractionError: error.error });
+      set({
+        extractionError: {
+          type: 'rate_limit',
+          message: 'Monthly import limit reached',
+          details: `You have used all ${FREE_TIER_MONTHLY_LIMIT} AI imports for this month. Limit resets next month.`,
+          isRetryable: false,
+        },
+      });
       return error;
     }
 
@@ -108,11 +230,24 @@ export const useAIImportStore = create<AIImportStore>((set, get) => ({
         error: 'API not configured',
         details: 'Please add your Claude API key to .env.local',
       };
-      set({ extractionError: error.error, isApiConfigured: false });
+      set({
+        extractionError: {
+          type: 'api_not_configured',
+          message: 'API not configured',
+          details: 'Please add your Claude API key to .env.local',
+          isRetryable: false,
+        },
+        isApiConfigured: false,
+      });
       return error;
     }
 
-    set({ isExtracting: true, extractionError: null });
+    set({
+      isExtracting: true,
+      extractionError: null,
+      extractionConfidence: null,
+      extractionWarnings: [],
+    });
 
     try {
       const result = await extractSchemaFromImage(imageBase64, mediaType);
@@ -128,13 +263,16 @@ export const useAIImportStore = create<AIImportStore>((set, get) => ({
 
         set({
           extractedSchema: result.schema,
+          extractionConfidence: result.confidence,
+          extractionWarnings: result.warnings || [],
           isExtracting: false,
           importsThisMonth: newCount,
           canImport: newCount < FREE_TIER_MONTHLY_LIMIT,
         });
       } else {
+        const categorizedError = categorizeError(result.error, result.details);
         set({
-          extractionError: result.error,
+          extractionError: categorizedError,
           isExtracting: false,
         });
       }
@@ -142,8 +280,9 @@ export const useAIImportStore = create<AIImportStore>((set, get) => ({
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
+      const categorizedError = categorizeError(message);
       set({
-        extractionError: message,
+        extractionError: categorizedError,
         isExtracting: false,
       });
       return {
@@ -154,7 +293,12 @@ export const useAIImportStore = create<AIImportStore>((set, get) => ({
     }
   },
 
-  clearExtractedSchema: () => set({ extractedSchema: null }),
+  clearExtractedSchema: () =>
+    set({
+      extractedSchema: null,
+      extractionConfidence: null,
+      extractionWarnings: [],
+    }),
 
   clearError: () => set({ extractionError: null }),
 
