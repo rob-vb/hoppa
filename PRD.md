@@ -21,14 +21,14 @@
 - [x] Create database schema (schemas, workout_days, exercises, workout_sessions, exercise_logs, set_logs)
 
 #### Schema Management (1.5 weeks)
-- [ ] Create Zustand schema store with SQLite sync
-- [ ] Build schema list screen `(schemas)/index.tsx`
-- [ ] Build schema creation screen `(schemas)/create.tsx`
-- [ ] Implement workout day management (add, edit, reorder, delete)
-- [ ] Implement exercise management within days
-- [ ] Add equipment type selector (plates/machine/other)
-- [ ] Add base weight input
-- [ ] Add target sets and rep range inputs
+- [x] Create Zustand schema store with SQLite sync
+- [x] Build schema list screen `(schemas)/index.tsx`
+- [x] Build schema creation screen `(schemas)/create.tsx`
+- [x] Implement workout day management (add, edit, reorder, delete)
+- [x] Implement exercise management within days
+- [x] Add equipment type selector (plates/machine/other)
+- [x] Add base weight input
+- [x] Add target sets and rep range inputs
 - [ ] Add progressive loading toggles (schema-level and exercise-level)
 - [ ] Add progression increment selector (2.5kg/5kg/custom)
 - [ ] Build schema details/edit screen `(schemas)/[schemaId].tsx`
