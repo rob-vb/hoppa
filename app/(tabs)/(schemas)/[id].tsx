@@ -1,23 +1,23 @@
+import { useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
-export default function HistoryScreen() {
+export default function SchemaDetailsScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <ThemedText type="title" style={styles.title}>
-          History
-        </ThemedText>
-
         <View style={styles.placeholder}>
           <ThemedText style={styles.placeholderText}>
-            Your workout history will appear here
+            Schema details for ID: {id}
           </ThemedText>
         </View>
       </ScrollView>
@@ -34,13 +34,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingTop: 60,
-  },
-  title: {
-    marginBottom: 24,
   },
   placeholder: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#2C2C2E',
     borderRadius: 12,
     padding: 32,
     alignItems: 'center',
