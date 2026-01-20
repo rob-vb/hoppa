@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ExerciseCard } from '@/components/ui/exercise-card';
 import { useWorkoutStore } from '@/stores/workout-store';
 import { Colors } from '@/constants/theme';
 import { SetLog } from '@/db/types';
@@ -240,43 +241,15 @@ export default function ActiveWorkoutScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Exercise Info */}
-        <View style={styles.exerciseHeader}>
-          <ThemedText type="title" style={styles.exerciseName}>
-            {exercise.name}
-          </ThemedText>
-          <View style={styles.exerciseMeta}>
-            <View style={styles.metaItem}>
-              <IconSymbol
-                name="scalemass.fill"
-                size={16}
-                color={Colors.dark.textSecondary}
-              />
-              <ThemedText style={styles.metaText}>
-                {currentExerciseLog.totalWeight} kg
-              </ThemedText>
-            </View>
-            <View style={styles.metaItem}>
-              <IconSymbol
-                name="arrow.trianglehead.2.clockwise"
-                size={16}
-                color={Colors.dark.textSecondary}
-              />
-              <ThemedText style={styles.metaText}>
-                {exercise.targetRepsMin}-{exercise.targetRepsMax} reps
-              </ThemedText>
-            </View>
-          </View>
-
-          {isCurrentExerciseComplete && progressionEarned && (
-            <View style={styles.progressionBadge}>
-              <IconSymbol name="arrow.up.circle.fill" size={16} color="#22C55E" />
-              <ThemedText style={styles.progressionText}>
-                Progression earned! +{exercise.progressionIncrement}kg next time
-              </ThemedText>
-            </View>
-          )}
-        </View>
+        {/* Current Exercise Card */}
+        <ExerciseCard
+          exercise={exercise}
+          sets={sets}
+          totalWeight={currentExerciseLog.totalWeight}
+          status={status}
+          progressionEarned={progressionEarned}
+          completedSetsCount={completedSets}
+        />
 
         {/* Sets */}
         <View style={styles.setsSection}>
@@ -587,41 +560,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 100,
-  },
-  exerciseHeader: {
-    marginBottom: 24,
-  },
-  exerciseName: {
-    fontSize: 28,
-    marginBottom: 12,
-  },
-  exerciseMeta: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  metaText: {
-    fontSize: 15,
-    color: Colors.dark.textSecondary,
-  },
-  progressionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#22C55E20',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  progressionText: {
-    fontSize: 14,
-    color: '#22C55E',
-    fontWeight: '500',
   },
   setsSection: {
     marginBottom: 24,
