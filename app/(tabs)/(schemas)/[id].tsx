@@ -425,6 +425,20 @@ export default function SchemaDetailsScreen() {
             <View style={styles.rowInputs}>
               <View style={styles.rowInputItemWide}>
                 <Input
+                  label="Base Weight (kg)"
+                  placeholder="0"
+                  value={String(exercise.baseWeight)}
+                  onChangeText={(text) => {
+                    const val = parseFloat(text);
+                    if (!isNaN(val) && val >= 0) {
+                      handleUpdateExerciseField(exercise.id, 'baseWeight', val);
+                    }
+                  }}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={styles.rowInputItemWide}>
+                <Input
                   label="Current Weight (kg)"
                   placeholder="0"
                   value={String(exercise.currentWeight)}
@@ -437,6 +451,9 @@ export default function SchemaDetailsScreen() {
                   keyboardType="decimal-pad"
                 />
               </View>
+            </View>
+
+            <View style={styles.rowInputs}>
               <View style={styles.rowInputItemWide}>
                 <Input
                   label="Increment (kg)"
@@ -451,6 +468,7 @@ export default function SchemaDetailsScreen() {
                   keyboardType="decimal-pad"
                 />
               </View>
+              <View style={styles.rowInputItemWide} />
             </View>
 
             <View style={styles.switchRow}>
