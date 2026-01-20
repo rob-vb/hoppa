@@ -44,6 +44,7 @@ export const getWithExercises = query({
 export const create = mutation({
   args: {
     schemaId: v.id("schemas"),
+    localId: v.string(),
     name: v.string(),
     orderIndex: v.number(),
   },
@@ -55,6 +56,7 @@ export const create = mutation({
 
     return await ctx.db.insert("workoutDays", {
       schemaId: args.schemaId,
+      localId: args.localId,
       name: args.name,
       orderIndex: args.orderIndex,
       updatedAt: now,

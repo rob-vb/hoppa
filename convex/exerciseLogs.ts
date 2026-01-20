@@ -133,6 +133,7 @@ export const createDirect = mutation({
   args: {
     sessionId: v.id("workoutSessions"),
     exerciseId: v.id("exercises"),
+    localId: v.string(),
     status: v.union(
       v.literal("pending"),
       v.literal("completed"),
@@ -147,6 +148,7 @@ export const createDirect = mutation({
     const exerciseLogId = await ctx.db.insert("exerciseLogs", {
       sessionId: args.sessionId,
       exerciseId: args.exerciseId,
+      localId: args.localId,
       status: args.status,
       microplateUsed: args.microplateUsed,
       totalWeight: args.totalWeight,

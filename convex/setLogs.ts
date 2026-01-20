@@ -65,6 +65,7 @@ export const batchLogReps = mutation({
 export const createDirect = mutation({
   args: {
     exerciseLogId: v.id("exerciseLogs"),
+    localId: v.string(),
     setNumber: v.number(),
     targetReps: v.string(),
     completedReps: v.optional(v.number()),
@@ -73,6 +74,7 @@ export const createDirect = mutation({
   handler: async (ctx, args) => {
     const setLogId = await ctx.db.insert("setLogs", {
       exerciseLogId: args.exerciseLogId,
+      localId: args.localId,
       setNumber: args.setNumber,
       targetReps: args.targetReps,
       completedReps: args.completedReps,

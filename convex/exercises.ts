@@ -26,6 +26,7 @@ export const get = query({
 export const create = mutation({
   args: {
     dayId: v.id("workoutDays"),
+    localId: v.string(),
     name: v.string(),
     equipmentType: v.union(
       v.literal("plates"),

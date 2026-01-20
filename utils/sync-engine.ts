@@ -540,6 +540,7 @@ export class SyncEngine {
       const payload = item.payload as unknown as Schema;
       const newId = await this.client.mutation(api.schemas.create, {
         userId: this.userId,
+        localId: item.entityId,
         name: payload.name,
         progressiveLoadingEnabled: payload.progressiveLoadingEnabled,
       });
@@ -572,6 +573,7 @@ export class SyncEngine {
 
       const newId = await this.client.mutation(api.workoutDays.create, {
         schemaId: schemaConvexId as Id<'schemas'>,
+        localId: item.entityId,
         name: payload.name,
         orderIndex: payload.orderIndex,
       });
@@ -605,6 +607,7 @@ export class SyncEngine {
 
       const newId = await this.client.mutation(api.exercises.create, {
         dayId: dayConvexId as Id<'workoutDays'>,
+        localId: item.entityId,
         name: payload.name,
         equipmentType: payload.equipmentType,
         baseWeight: payload.baseWeight,
@@ -613,7 +616,6 @@ export class SyncEngine {
         targetRepsMax: payload.targetRepsMax,
         progressiveLoadingEnabled: payload.progressiveLoadingEnabled,
         progressionIncrement: payload.progressionIncrement,
-        currentWeight: payload.currentWeight,
         orderIndex: payload.orderIndex,
       });
       await this.idMap.set(item.entityId, newId, 'exercise');
@@ -634,7 +636,7 @@ export class SyncEngine {
   }
 
   private async pushWorkoutSession(item: SyncQueueItem): Promise<void> {
-    if (!this.client) return;
+    if (!this.client || !this.userId) return;
 
     const convexId = this.idMap.getConvexId(item.entityId);
     const payload = item.payload as unknown as WorkoutSession;
@@ -644,9 +646,15 @@ export class SyncEngine {
       const dayConvexId = this.idMap.getConvexId(payload.dayId);
       if (!schemaConvexId || !dayConvexId) throw new Error('Parent entities not synced');
 
-      const newId = await this.client.mutation(api.workoutSessions.start, {
+      // Use createDirect for sync - exercise logs and set logs are pushed separately
+      const newId = await this.client.mutation(api.workoutSessions.createDirect, {
+        userId: this.userId,
         schemaId: schemaConvexId as Id<'schemas'>,
         dayId: dayConvexId as Id<'workoutDays'>,
+        localId: item.entityId,
+        startedAt: payload.startedAt,
+        completedAt: payload.completedAt ?? undefined,
+        status: payload.status,
       });
       await this.idMap.set(item.entityId, newId, 'workoutSession');
     } else if (item.operation === 'update') {
@@ -672,26 +680,36 @@ export class SyncEngine {
     const convexId = this.idMap.getConvexId(item.entityId);
     const payload = item.payload as unknown as ExerciseLog;
 
-    if (item.operation === 'update') {
+    if (item.operation === 'create') {
+      const sessionConvexId = this.idMap.getConvexId(payload.sessionId);
+      const exerciseConvexId = this.idMap.getConvexId(payload.exerciseId);
+      if (!sessionConvexId || !exerciseConvexId) throw new Error('Parent entities not synced');
+
+      const newId = await this.client.mutation(api.exerciseLogs.createDirect, {
+        sessionId: sessionConvexId as Id<'workoutSessions'>,
+        exerciseId: exerciseConvexId as Id<'exercises'>,
+        localId: item.entityId,
+        status: payload.status,
+        microplateUsed: payload.microplateUsed,
+        totalWeight: payload.totalWeight,
+        progressionEarned: payload.progressionEarned,
+        updatedAt: payload.updatedAt,
+      });
+      await this.idMap.set(item.entityId, newId, 'exerciseLog');
+    } else if (item.operation === 'update') {
       if (!convexId) throw new Error('No mapping found for exercise log');
 
       if (payload.status === 'completed') {
         await this.client.mutation(api.exerciseLogs.complete, {
           id: convexId as Id<'exerciseLogs'>,
+          progressionEarned: payload.progressionEarned,
         });
       } else if (payload.status === 'skipped') {
         await this.client.mutation(api.exerciseLogs.skip, {
           id: convexId as Id<'exerciseLogs'>,
         });
       }
-
-      if (payload.progressionEarned) {
-        await this.client.mutation(api.exerciseLogs.markProgressionEarned, {
-          id: convexId as Id<'exerciseLogs'>,
-        });
-      }
     }
-    // Create/delete handled by session start/abandon
   }
 
   private async pushSetLog(item: SyncQueueItem): Promise<void> {
@@ -700,7 +718,20 @@ export class SyncEngine {
     const convexId = this.idMap.getConvexId(item.entityId);
     const payload = item.payload as unknown as SetLog;
 
-    if (item.operation === 'update' && convexId) {
+    if (item.operation === 'create') {
+      const exerciseLogConvexId = this.idMap.getConvexId(payload.exerciseLogId);
+      if (!exerciseLogConvexId) throw new Error('Parent exercise log not synced');
+
+      const newId = await this.client.mutation(api.setLogs.createDirect, {
+        exerciseLogId: exerciseLogConvexId as Id<'exerciseLogs'>,
+        localId: item.entityId,
+        setNumber: payload.setNumber,
+        targetReps: payload.targetReps,
+        completedReps: payload.completedReps ?? undefined,
+        updatedAt: payload.updatedAt,
+      });
+      await this.idMap.set(item.entityId, newId, 'setLog');
+    } else if (item.operation === 'update' && convexId) {
       if (payload.completedReps !== null) {
         await this.client.mutation(api.setLogs.logReps, {
           id: convexId as Id<'setLogs'>,
@@ -1062,6 +1093,7 @@ export class SyncEngine {
           // Create schema in Convex
           const convexId = await this.client.mutation(api.schemas.create, {
             userId: this.userId,
+            localId: schema.id,
             name: schema.name,
             progressiveLoadingEnabled: schema.progressiveLoadingEnabled,
           });
@@ -1074,6 +1106,7 @@ export class SyncEngine {
             for (const day of schemaWithDays.days) {
               const dayConvexId = await this.client.mutation(api.workoutDays.create, {
                 schemaId: convexId as Id<'schemas'>,
+                localId: day.id,
                 name: day.name,
                 orderIndex: day.orderIndex,
               });
@@ -1084,6 +1117,7 @@ export class SyncEngine {
               for (const exercise of day.exercises) {
                 const exerciseConvexId = await this.client.mutation(api.exercises.create, {
                   dayId: dayConvexId as Id<'workoutDays'>,
+                  localId: exercise.id,
                   name: exercise.name,
                   equipmentType: exercise.equipmentType,
                   baseWeight: exercise.baseWeight,
@@ -1092,7 +1126,6 @@ export class SyncEngine {
                   targetRepsMax: exercise.targetRepsMax,
                   progressiveLoadingEnabled: exercise.progressiveLoadingEnabled,
                   progressionIncrement: exercise.progressionIncrement,
-                  currentWeight: exercise.currentWeight,
                   orderIndex: exercise.orderIndex,
                 });
                 await this.idMap.set(exercise.id, exerciseConvexId, 'exercise');
@@ -1142,6 +1175,7 @@ export class SyncEngine {
           userId: this.userId,
           schemaId: schemaConvexId as Id<'schemas'>,
           dayId: dayConvexId as Id<'workoutDays'>,
+          localId: session.id,
           startedAt: session.startedAt,
           completedAt: session.completedAt ?? undefined,
           status: session.status,
@@ -1166,6 +1200,7 @@ export class SyncEngine {
             const exerciseLogConvexId = await this.client.mutation(api.exerciseLogs.createDirect, {
               sessionId: sessionConvexId as Id<'workoutSessions'>,
               exerciseId: exerciseConvexId as Id<'exercises'>,
+              localId: exerciseLog.id,
               status: exerciseLog.status,
               microplateUsed: exerciseLog.microplateUsed,
               totalWeight: exerciseLog.totalWeight,
@@ -1182,6 +1217,7 @@ export class SyncEngine {
               try {
                 const setLogConvexId = await this.client.mutation(api.setLogs.createDirect, {
                   exerciseLogId: exerciseLogConvexId as Id<'exerciseLogs'>,
+                  localId: setLog.id,
                   setNumber: setLog.setNumber,
                   targetReps: setLog.targetReps,
                   completedReps: setLog.completedReps ?? undefined,

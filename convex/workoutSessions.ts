@@ -105,6 +105,9 @@ export const start = mutation({
     userId: v.id("users"),
     schemaId: v.id("schemas"),
     dayId: v.id("workoutDays"),
+    localId: v.string(),
+    exerciseLogLocalIds: v.array(v.string()),
+    setLogLocalIds: v.array(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     // Check for existing in-progress session
@@ -126,6 +129,7 @@ export const start = mutation({
       userId: args.userId,
       schemaId: args.schemaId,
       dayId: args.dayId,
+      localId: args.localId,
       startedAt: now,
       status: "in_progress",
     });
@@ -136,11 +140,19 @@ export const start = mutation({
       .withIndex("by_day", (q) => q.eq("dayId", args.dayId))
       .collect();
 
+    // Sort exercises by orderIndex to match the order of localIds
+    exercises.sort((a, b) => a.orderIndex - b.orderIndex);
+
     // Create exercise logs and set logs for each exercise
-    for (const exercise of exercises) {
+    for (let i = 0; i < exercises.length; i++) {
+      const exercise = exercises[i];
+      const exerciseLogLocalId = args.exerciseLogLocalIds[i];
+      const setLogLocalIds = args.setLogLocalIds[i] || [];
+
       const exerciseLogId = await ctx.db.insert("exerciseLogs", {
         sessionId,
         exerciseId: exercise._id,
+        localId: exerciseLogLocalId,
         status: "pending",
         microplateUsed: 0,
         totalWeight: exercise.currentWeight,
@@ -149,10 +161,12 @@ export const start = mutation({
       });
 
       // Create set logs
-      for (let i = 1; i <= exercise.targetSets; i++) {
+      for (let j = 0; j < exercise.targetSets; j++) {
+        const setLogLocalId = setLogLocalIds[j];
         await ctx.db.insert("setLogs", {
           exerciseLogId,
-          setNumber: i,
+          localId: setLogLocalId,
+          setNumber: j + 1,
           targetReps: `${exercise.targetRepsMin}-${exercise.targetRepsMax}`,
           updatedAt: now,
         });
@@ -216,6 +230,7 @@ export const createDirect = mutation({
     userId: v.id("users"),
     schemaId: v.id("schemas"),
     dayId: v.id("workoutDays"),
+    localId: v.string(),
     startedAt: v.number(),
     completedAt: v.optional(v.number()),
     status: v.union(v.literal("in_progress"), v.literal("completed")),
@@ -225,6 +240,7 @@ export const createDirect = mutation({
       userId: args.userId,
       schemaId: args.schemaId,
       dayId: args.dayId,
+      localId: args.localId,
       startedAt: args.startedAt,
       completedAt: args.completedAt,
       status: args.status,

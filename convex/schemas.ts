@@ -58,6 +58,7 @@ export const getWithDays = query({
 export const create = mutation({
   args: {
     userId: v.id("users"),
+    localId: v.string(),
     name: v.string(),
     progressiveLoadingEnabled: v.boolean(),
   },
@@ -65,6 +66,7 @@ export const create = mutation({
     const now = Date.now();
     return await ctx.db.insert("schemas", {
       userId: args.userId,
+      localId: args.localId,
       name: args.name,
       progressiveLoadingEnabled: args.progressiveLoadingEnabled,
       createdAt: now,
