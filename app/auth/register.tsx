@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { ThemedText } from '@/components/themed-text';
@@ -17,12 +17,13 @@ import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/contexts/auth-context';
 
 export default function RegisterScreen() {
-  const { signUp, isLoading } = useAuth();
+  const { signUp } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSignUp = async () => {
     if (!email || !password || !confirmPassword) {
@@ -41,17 +42,20 @@ export default function RegisterScreen() {
     }
 
     setError(null);
+    setIsSubmitting(true);
     try {
       if (Platform.OS === 'ios') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signUp(email, password, name || undefined);
-      router.replace('/(tabs)');
+      // Navigation is handled automatically by the auth state change in _layout.tsx
     } catch {
       setError('Failed to create account. Please try again.');
       if (Platform.OS === 'ios') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -91,7 +95,7 @@ export default function RegisterScreen() {
                 onChangeText={setName}
                 autoCapitalize="words"
                 autoComplete="name"
-                editable={!isLoading}
+                editable={!isSubmitting}
               />
             </View>
 
@@ -106,7 +110,7 @@ export default function RegisterScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoComplete="email"
-                editable={!isLoading}
+                editable={!isSubmitting}
               />
             </View>
 
@@ -120,7 +124,7 @@ export default function RegisterScreen() {
                 onChangeText={setPassword}
                 secureTextEntry
                 autoComplete="new-password"
-                editable={!isLoading}
+                editable={!isSubmitting}
               />
             </View>
 
@@ -134,16 +138,16 @@ export default function RegisterScreen() {
                 onChangeText={setConfirmPassword}
                 secureTextEntry
                 autoComplete="new-password"
-                editable={!isLoading}
+                editable={!isSubmitting}
               />
             </View>
 
             <TouchableOpacity
-              style={[styles.button, isLoading && styles.buttonDisabled]}
+              style={[styles.button, isSubmitting && styles.buttonDisabled]}
               onPress={handleSignUp}
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
-              {isLoading ? (
+              {isSubmitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <ThemedText style={styles.buttonText}>Create Account</ThemedText>

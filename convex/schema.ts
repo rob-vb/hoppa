@@ -1,16 +1,21 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
-  // Users table for authentication
+  ...authTables,
+  // Users table for authentication - extended from authTables
   users: defineTable({
-    email: v.string(),
+    // Required by Convex Auth
     name: v.optional(v.string()),
-    imageUrl: v.optional(v.string()),
-    externalId: v.string(), // Auth provider's user ID
+    image: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
   })
-    .index("by_external_id", ["externalId"])
-    .index("by_email", ["email"]),
+    .index("email", ["email"]),
 
   // Schema - workout template
   schemas: defineTable({

@@ -8,7 +8,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { ThemedText } from '@/components/themed-text';
@@ -16,10 +16,11 @@ import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/contexts/auth-context';
 
 export default function LoginScreen() {
-  const { signIn, isLoading } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -28,17 +29,20 @@ export default function LoginScreen() {
     }
 
     setError(null);
+    setIsSubmitting(true);
     try {
       if (Platform.OS === 'ios') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signIn(email, password);
-      router.replace('/(tabs)');
+      // Navigation is handled automatically by the auth state change in _layout.tsx
     } catch {
       setError('Invalid email or password');
       if (Platform.OS === 'ios') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -75,7 +79,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
               keyboardType="email-address"
               autoComplete="email"
-              editable={!isLoading}
+              editable={!isSubmitting}
             />
           </View>
 
@@ -89,16 +93,16 @@ export default function LoginScreen() {
               onChangeText={setPassword}
               secureTextEntry
               autoComplete="password"
-              editable={!isLoading}
+              editable={!isSubmitting}
             />
           </View>
 
           <TouchableOpacity
-            style={[styles.button, isLoading && styles.buttonDisabled]}
+            style={[styles.button, isSubmitting && styles.buttonDisabled]}
             onPress={handleSignIn}
-            disabled={isLoading}
+            disabled={isSubmitting}
           >
-            {isLoading ? (
+            {isSubmitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <ThemedText style={styles.buttonText}>Sign In</ThemedText>

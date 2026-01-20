@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useEffect, type ReactNode } from 'react';
-import { useAuthStore, type User } from '@/stores/auth-store';
+import React, { createContext, useContext, type ReactNode } from 'react';
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import type { User } from '@/stores/auth-store';
 
 interface AuthContextValue {
   user: User | null;
@@ -17,24 +20,36 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const {
-    user,
-    isLoading,
-    isAuthenticated,
-    signIn,
-    signUp,
-    signOut,
-    loadSession,
-  } = useAuthStore();
+  const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
+  const user = useQuery(api.users.currentUser);
 
-  useEffect(() => {
-    loadSession();
-  }, [loadSession]);
+  const isLoading = user === undefined;
+  const isAuthenticated = user !== null && user !== undefined;
+
+  const signIn = async (email: string, password: string) => {
+    await convexSignIn("password", { email, password, flow: "signIn" });
+  };
+
+  const signUp = async (email: string, password: string, name?: string) => {
+    const params: { email: string; password: string; name?: string; flow: "signUp" } = {
+      email,
+      password,
+      flow: "signUp",
+    };
+    if (name) {
+      params.name = name;
+    }
+    await convexSignIn("password", params);
+  };
+
+  const signOut = async () => {
+    await convexSignOut();
+  };
 
   return (
     <AuthContext.Provider
       value={{
-        user,
+        user: user ?? null,
         isLoading,
         isAuthenticated,
         signIn,
