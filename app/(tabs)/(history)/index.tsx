@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DateRangeFilter, DateRangeOption, getDateRangeFromOption } from '@/components/ui/date-range-filter';
 import { HistorySessionCard } from '@/components/ui/history-session-card';
 import { Colors } from '@/constants/theme';
 import { WorkoutSession } from '@/db/types';
@@ -31,18 +32,14 @@ export default function HistoryScreen() {
   const [sessions, setSessions] = useState<SessionWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<DateRangeOption>('1m');
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      // Get completed workout sessions from the last 30 days using batch query
-      const now = Date.now();
-      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-      const sessionsWithDetails = await db.getCompletedSessionsWithDetails(
-        thirtyDaysAgo,
-        now
-      );
+      const { start, end } = getDateRangeFromOption(dateRange);
+      const sessionsWithDetails = await db.getCompletedSessionsWithDetails(start, end);
 
       setSessions(sessionsWithDetails);
     } catch (err) {
@@ -50,7 +47,7 @@ export default function HistoryScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [dateRange]);
 
   // Load data on mount
   useEffect(() => {
@@ -112,18 +109,20 @@ export default function HistoryScreen() {
     [error]
   );
 
+  const dateRangeLabel = getDateRangeFromOption(dateRange).label;
+
   const ListEmptyComponent = useMemo(
     () => (
       <View style={styles.placeholder}>
         <ThemedText style={styles.placeholderText}>
-          No workouts in the last 30 days
+          No workouts in the {dateRangeLabel}
         </ThemedText>
         <ThemedText style={styles.placeholderSubtext}>
           Complete a workout to see it here
         </ThemedText>
       </View>
     ),
-    []
+    [dateRangeLabel]
   );
 
   // Loading state - early return after all hooks
@@ -139,6 +138,9 @@ export default function HistoryScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <View style={styles.filterContainer}>
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+      </View>
       <SectionList
         sections={sections}
         renderItem={renderItem}
@@ -189,6 +191,10 @@ function groupSessionsIntoSections(sessions: SessionWithDetails[]): SessionSecti
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  filterContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   scrollContent: {
     padding: 16,
