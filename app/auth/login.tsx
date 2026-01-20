@@ -16,12 +16,13 @@ import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/contexts/auth-context';
 
 export default function LoginScreen() {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [isAppleSubmitting, setIsAppleSubmitting] = useState(false);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -62,6 +63,24 @@ export default function LoginScreen() {
       }
     } finally {
       setIsGoogleSubmitting(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setError(null);
+    setIsAppleSubmitting(true);
+    try {
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      await signInWithApple();
+    } catch {
+      setError('Failed to sign in with Apple');
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } finally {
+      setIsAppleSubmitting(false);
     }
   };
 
@@ -119,7 +138,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={[styles.button, isSubmitting && styles.buttonDisabled]}
             onPress={handleSignIn}
-            disabled={isSubmitting || isGoogleSubmitting}
+            disabled={isSubmitting || isGoogleSubmitting || isAppleSubmitting}
           >
             {isSubmitting ? (
               <ActivityIndicator color="#fff" />
@@ -137,12 +156,24 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={[styles.googleButton, isGoogleSubmitting && styles.buttonDisabled]}
             onPress={handleGoogleSignIn}
-            disabled={isSubmitting || isGoogleSubmitting}
+            disabled={isSubmitting || isGoogleSubmitting || isAppleSubmitting}
           >
             {isGoogleSubmitting ? (
               <ActivityIndicator color="#1F2937" />
             ) : (
               <ThemedText style={styles.googleButtonText}>Continue with Google</ThemedText>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.appleButton, isAppleSubmitting && styles.buttonDisabled]}
+            onPress={handleAppleSignIn}
+            disabled={isSubmitting || isGoogleSubmitting || isAppleSubmitting}
+          >
+            {isAppleSubmitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <ThemedText style={styles.appleButtonText}>Continue with Apple</ThemedText>
             )}
           </TouchableOpacity>
 
@@ -249,6 +280,17 @@ const styles = StyleSheet.create({
   },
   googleButtonText: {
     color: '#1F2937',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  appleButton: {
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  appleButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
