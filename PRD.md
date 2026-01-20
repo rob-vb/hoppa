@@ -73,9 +73,9 @@
 - [x] Show next session's weight after progression
 
 #### History & Polish (1 week)
-- [ ] Build history tab `(history)/index.tsx`
-- [ ] Show last 30 days of workouts
-- [ ] Display workout summary (date, schema, day, duration)
+- [x] Build history tab `(history)/index.tsx`
+- [x] Show last 30 days of workouts
+- [x] Display workout summary (date, schema, day, duration)
 - [ ] Show exercise logs with sets/reps
 - [ ] Indicate progressions earned per workout
 - [ ] Bug fixes and edge case handling
