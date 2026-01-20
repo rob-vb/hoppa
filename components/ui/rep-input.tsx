@@ -26,6 +26,7 @@ export function RepInput({
 
   // Parse target reps to get quick button values
   const [minReps, maxReps] = targetReps.split('-').map(Number);
+  const meetsTarget = completedReps !== null && completedReps >= minReps;
   const quickButtons = generateQuickButtons(minReps, maxReps);
 
   const handleQuickButton = (reps: number) => {
@@ -121,16 +122,27 @@ export function RepInput({
           style={[
             styles.repDisplay,
             isCompleted && styles.repDisplayCompleted,
+            meetsTarget && styles.repDisplayMeetsTarget,
           ]}
         >
-          <ThemedText
-            style={[
-              styles.repValue,
-              isCompleted && styles.repValueCompleted,
-            ]}
-          >
-            {completedReps ?? '-'}
-          </ThemedText>
+          <View style={styles.repValueRow}>
+            <ThemedText
+              style={[
+                styles.repValue,
+                isCompleted && styles.repValueCompleted,
+                meetsTarget && styles.repValueMeetsTarget,
+              ]}
+            >
+              {completedReps ?? '-'}
+            </ThemedText>
+            {meetsTarget && (
+              <IconSymbol
+                name="checkmark.circle.fill"
+                size={24}
+                color="#22C55E"
+              />
+            )}
+          </View>
           <ThemedText style={styles.repUnit}>reps</ThemedText>
         </View>
 
@@ -259,6 +271,15 @@ const styles = StyleSheet.create({
     borderColor: Colors.dark.primary,
     backgroundColor: `${Colors.dark.primary}20`,
   },
+  repDisplayMeetsTarget: {
+    borderColor: '#22C55E',
+    backgroundColor: '#22C55E20',
+  },
+  repValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   repValue: {
     fontSize: 36,
     fontWeight: '700',
@@ -266,6 +287,9 @@ const styles = StyleSheet.create({
   },
   repValueCompleted: {
     color: Colors.dark.text,
+  },
+  repValueMeetsTarget: {
+    color: '#22C55E',
   },
   repUnit: {
     fontSize: 12,
