@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IncrementSelector } from '@/components/ui/increment-selector';
 import { useSchemaStore } from '@/stores/schema-store';
 import { Colors } from '@/constants/theme';
 import { EquipmentType, Exercise, WorkoutDayWithExercises } from '@/db/types';
@@ -453,23 +454,16 @@ export default function SchemaDetailsScreen() {
               </View>
             </View>
 
-            <View style={styles.rowInputs}>
-              <View style={styles.rowInputItemWide}>
-                <Input
-                  label="Increment (kg)"
-                  placeholder="2.5"
-                  value={String(exercise.progressionIncrement)}
-                  onChangeText={(text) => {
-                    const val = parseFloat(text);
-                    if (!isNaN(val) && val > 0) {
-                      handleUpdateExerciseField(exercise.id, 'progressionIncrement', val);
-                    }
-                  }}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              <View style={styles.rowInputItemWide} />
-            </View>
+            <IncrementSelector
+              label="Progression Increment"
+              value={String(exercise.progressionIncrement)}
+              onValueChange={(text) => {
+                const val = parseFloat(text);
+                if (!isNaN(val) && val > 0) {
+                  handleUpdateExerciseField(exercise.id, 'progressionIncrement', val);
+                }
+              }}
+            />
 
             {currentSchema?.progressiveLoadingEnabled && (
               <View style={styles.switchRow}>

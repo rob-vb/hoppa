@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IncrementSelector } from '@/components/ui/increment-selector';
 import { useSchemaStore } from '@/stores/schema-store';
 import { Colors } from '@/constants/theme';
 import { EquipmentType } from '@/db/types';
@@ -471,32 +472,25 @@ export default function CreateSchemaScreen() {
         </View>
       </View>
 
-      <View style={styles.rowInputs}>
-        <View style={styles.rowInputItemWide}>
-          <Input
-            label="Starting Weight (kg)"
-            placeholder="0"
-            value={exercise.baseWeight}
-            onChangeText={(text) =>
-              handleUpdateExercise(dayId, exercise.id, { baseWeight: text })
-            }
-            keyboardType="decimal-pad"
-          />
-        </View>
-        <View style={styles.rowInputItemWide}>
-          <Input
-            label="Increment (kg)"
-            placeholder="2.5"
-            value={exercise.progressionIncrement}
-            onChangeText={(text) =>
-              handleUpdateExercise(dayId, exercise.id, {
-                progressionIncrement: text,
-              })
-            }
-            keyboardType="decimal-pad"
-          />
-        </View>
-      </View>
+      <Input
+        label="Starting Weight (kg)"
+        placeholder="0"
+        value={exercise.baseWeight}
+        onChangeText={(text) =>
+          handleUpdateExercise(dayId, exercise.id, { baseWeight: text })
+        }
+        keyboardType="decimal-pad"
+      />
+
+      <IncrementSelector
+        label="Progression Increment"
+        value={exercise.progressionIncrement}
+        onValueChange={(text) =>
+          handleUpdateExercise(dayId, exercise.id, {
+            progressionIncrement: text,
+          })
+        }
+      />
 
       {progressiveLoadingEnabled && (
         <View style={styles.switchRow}>
