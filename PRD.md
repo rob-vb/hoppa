@@ -38,9 +38,9 @@
 - [x] Set up Claude API integration
 - [x] Build image picker flow (camera/gallery)
 - [x] Create AI prompt for schema extraction
-- [ ] Parse AI response into schema structure
-- [ ] Build review/edit screen for extracted schema
-- [ ] Add rate limiting (3 imports/month for free tier)
+- [x] Parse AI response into schema structure
+- [x] Build review/edit screen for extracted schema
+- [x] Add rate limiting (3 imports/month for free tier)
 - [ ] Handle error states (unclear image, partial extraction, API errors)
 
 #### Workout Execution (2 weeks)
