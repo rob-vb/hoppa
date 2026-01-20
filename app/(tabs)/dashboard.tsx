@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Card } from '@/components/ui/card';
 import { OverviewCard } from '@/components/ui/overview-card';
+import { ExerciseProgressChart } from '@/components/ui/exercise-progress-chart';
 import { Colors } from '@/constants/theme';
 import * as db from '@/db/database';
 
@@ -314,10 +315,10 @@ export default function DashboardScreen() {
                 <ThemedText style={styles.changeText}>Change</ThemedText>
               </Pressable>
 
-              {/* Weight Progress Chart (Simplified) */}
+              {/* Weight Progress Chart */}
               <View style={styles.chartContainer}>
                 {filteredWeightHistory.length > 0 ? (
-                  <SimpleChart data={filteredWeightHistory} />
+                  <ExerciseProgressChart data={filteredWeightHistory} height={180} />
                 ) : (
                   <View style={styles.noDataContainer}>
                     <ThemedText style={styles.noDataText}>
@@ -423,34 +424,6 @@ export default function DashboardScreen() {
         </Card>
       </ScrollView>
     </ThemedView>
-  );
-}
-
-// Simple bar/line chart component
-function SimpleChart({ data }: { data: { date: number; weight: number }[] }) {
-  if (data.length === 0) return null;
-
-  const minWeight = Math.min(...data.map((d) => d.weight));
-  const maxWeight = Math.max(...data.map((d) => d.weight));
-  const range = maxWeight - minWeight || 1;
-
-  return (
-    <View style={styles.chart}>
-      <View style={styles.chartBars}>
-        {data.map((point, index) => {
-          const height = ((point.weight - minWeight) / range) * 100 + 20;
-          return (
-            <View key={index} style={styles.chartBarContainer}>
-              <View style={[styles.chartBar, { height: `${height}%` }]} />
-            </View>
-          );
-        })}
-      </View>
-      <View style={styles.chartLabels}>
-        <ThemedText style={styles.chartLabel}>{minWeight.toFixed(1)}kg</ThemedText>
-        <ThemedText style={styles.chartLabel}>{maxWeight.toFixed(1)}kg</ThemedText>
-      </View>
-    </View>
   );
 }
 
@@ -680,36 +653,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chartContainer: {
-    height: 160,
+    height: 180,
     marginBottom: 16,
-  },
-  chart: {
-    flex: 1,
-  },
-  chartBars: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 4,
-    paddingBottom: 24,
-  },
-  chartBarContainer: {
-    flex: 1,
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  chartBar: {
-    backgroundColor: Colors.dark.primary,
-    borderRadius: 4,
-    minHeight: 8,
-  },
-  chartLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  chartLabel: {
-    fontSize: 12,
-    color: Colors.dark.textSecondary,
   },
   noDataContainer: {
     height: 120,
