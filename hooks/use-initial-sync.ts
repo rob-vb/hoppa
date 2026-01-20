@@ -1,7 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useQuery } from 'convex/react';
 import { useConvexClient } from '@/contexts/convex-provider';
 import { useAuth } from '@/contexts/auth-context';
 import { syncEngine, SyncResult, SyncState } from '@/utils/sync-engine';
+import { api } from '@/convex/_generated/api';
+import * as db from '@/db/database';
+import type { Id } from '@/convex/_generated/dataModel';
 
 export interface InitialSyncState {
   /** Whether the initial sync has been completed for this session */
@@ -14,6 +18,8 @@ export interface InitialSyncState {
   error: string | null;
   /** Sync engine state */
   syncState: SyncState;
+  /** Whether real-time subscriptions are active */
+  isSubscribed: boolean;
 }
 
 export interface UseInitialSyncReturn extends InitialSyncState {
@@ -32,6 +38,7 @@ export interface UseInitialSyncReturn extends InitialSyncState {
  * - Initializes the sync engine when user is authenticated
  * - Provides methods to trigger initial and incremental syncs
  * - Tracks sync state and results
+ * - Enables real-time subscriptions after initial sync completes
  * - Automatically resets on logout
  */
 export function useInitialSync(): UseInitialSyncReturn {
@@ -43,16 +50,100 @@ export function useInitialSync(): UseInitialSyncReturn {
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<SyncState>(syncEngine.getState());
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
   // Track if we've initialized the sync engine for this session
   const isInitializedRef = useRef(false);
   const previousUserIdRef = useRef<string | null>(null);
+  const previousSchemasRef = useRef<string | null>(null);
 
   // Subscribe to sync engine state changes
   useEffect(() => {
     const unsubscribe = syncEngine.subscribe(setSyncState);
     return unsubscribe;
   }, []);
+
+  // ============================================
+  // Real-time Convex Subscriptions
+  // ============================================
+
+  // Subscribe to schemas list - only after initial sync is done
+  const schemas = useQuery(
+    api.schemas.list,
+    isAuthenticated && user && hasCompletedInitialSync
+      ? { userId: user._id as Id<'users'> }
+      : 'skip'
+  );
+
+  // Process schema changes from subscription
+  useEffect(() => {
+    if (!schemas || !hasCompletedInitialSync || !user) return;
+
+    // Mark as subscribed
+    if (!isSubscribed) {
+      setIsSubscribed(true);
+    }
+
+    // Create fingerprint for change detection
+    const currentFingerprint = JSON.stringify(
+      schemas.map((s: { _id: string; updatedAt: number; name: string }) => ({ id: s._id, updatedAt: s.updatedAt, name: s.name }))
+    );
+
+    // Skip if nothing changed
+    if (currentFingerprint === previousSchemasRef.current) return;
+    previousSchemasRef.current = currentFingerprint;
+
+    // Process real-time changes
+    processSchemaSubscriptionChanges(schemas);
+  }, [schemas, hasCompletedInitialSync, user, isSubscribed]);
+
+  // Helper to process schema subscription changes
+  const processSchemaSubscriptionChanges = async (
+    remoteSchemas: NonNullable<typeof schemas>
+  ) => {
+    try {
+      // Handle new and updated schemas
+      for (const remote of remoteSchemas) {
+        const localId = syncEngine.getLocalIdFromConvex(remote._id);
+
+        if (!localId) {
+          // New schema from remote - create locally
+          const newLocal = await db.createSchema(
+            remote.name,
+            remote.progressiveLoadingEnabled
+          );
+          await syncEngine.setIdMapping(newLocal.id, remote._id, 'schema');
+          console.log('[Subscription] Created local schema from remote:', remote.name);
+        } else {
+          // Existing schema - update if remote is newer
+          const localSchema = await db.getSchemaById(localId);
+          if (localSchema && remote.updatedAt > localSchema.updatedAt) {
+            await db.updateSchema(localId, {
+              name: remote.name,
+              progressiveLoadingEnabled: remote.progressiveLoadingEnabled,
+            });
+            console.log('[Subscription] Updated local schema from remote:', remote.name);
+          }
+        }
+      }
+
+      // Handle deleted schemas
+      const localSchemas = await db.getSchemas();
+      for (const local of localSchemas) {
+        const convexId = syncEngine.getIdMapping(local.id);
+        if (convexId) {
+          const stillExists = remoteSchemas.some((s: { _id: string }) => s._id === convexId);
+          if (!stillExists) {
+            await db.deleteSchema(local.id);
+            await syncEngine.removeIdMapping(local.id);
+            console.log('[Subscription] Deleted local schema (removed from remote):', local.name);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Subscription] Failed to process schema changes:', err);
+    }
+  };
 
   // Initialize sync engine when user becomes authenticated
   useEffect(() => {
@@ -62,9 +153,11 @@ export function useInitialSync(): UseInitialSyncReturn {
         if (isInitializedRef.current) {
           await syncEngine.reset();
           isInitializedRef.current = false;
+          previousSchemasRef.current = null;
           setHasCompletedInitialSync(false);
           setLastSyncResult(null);
           setError(null);
+          setIsSubscribed(false);
         }
         previousUserIdRef.current = user?._id ?? null;
       }
@@ -212,9 +305,11 @@ export function useInitialSync(): UseInitialSyncReturn {
     await syncEngine.reset();
     isInitializedRef.current = false;
     previousUserIdRef.current = null;
+    previousSchemasRef.current = null;
     setHasCompletedInitialSync(false);
     setLastSyncResult(null);
     setError(null);
+    setIsSubscribed(false);
   }, []);
 
   return {
@@ -223,6 +318,7 @@ export function useInitialSync(): UseInitialSyncReturn {
     lastSyncResult,
     error,
     syncState,
+    isSubscribed,
     triggerInitialSync,
     triggerSync,
     resetSyncState,

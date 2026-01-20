@@ -465,6 +465,7 @@ export class SyncEngine {
     if (item.operation === 'create') {
       const payload = item.payload as unknown as Schema;
       const newId = await this.client.mutation(api.schemas.create, {
+        userId: this.userId,
         name: payload.name,
         progressiveLoadingEnabled: payload.progressiveLoadingEnabled,
       });
@@ -818,6 +819,7 @@ export class SyncEngine {
         try {
           // Create schema in Convex
           const convexId = await this.client.mutation(api.schemas.create, {
+            userId: this.userId,
             name: schema.name,
             progressiveLoadingEnabled: schema.progressiveLoadingEnabled,
           });
@@ -980,6 +982,39 @@ export class SyncEngine {
 
   hasMapping(localId: string): boolean {
     return this.idMap.has(localId);
+  }
+
+  // ============================================
+  // Subscription Support Methods
+  // ============================================
+
+  /**
+   * Get local ID from Convex ID (reverse lookup).
+   * Used by subscription hooks to find local entities.
+   */
+  getLocalIdFromConvex(convexId: string): string | undefined {
+    return this.idMap.getLocalId(convexId);
+  }
+
+  /**
+   * Set an ID mapping (exposed for subscription hooks).
+   */
+  async setIdMapping(localId: string, convexId: string, entityType: SyncEntityType): Promise<void> {
+    await this.idMap.set(localId, convexId, entityType);
+  }
+
+  /**
+   * Remove an ID mapping (exposed for subscription hooks).
+   */
+  async removeIdMapping(localId: string): Promise<void> {
+    await this.idMap.remove(localId);
+  }
+
+  /**
+   * Check if a Convex ID has a mapping.
+   */
+  hasConvexIdMapping(convexId: string): boolean {
+    return this.idMap.hasConvexId(convexId);
   }
 }
 
