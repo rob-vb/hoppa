@@ -31,7 +31,7 @@ export const logReps = mutation({
     completedReps: v.number(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { completedReps: args.completedReps });
+    await ctx.db.patch(args.id, { completedReps: args.completedReps, updatedAt: Date.now() });
   },
 });
 
@@ -39,7 +39,7 @@ export const logReps = mutation({
 export const clearReps = mutation({
   args: { id: v.id("setLogs") },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { completedReps: undefined });
+    await ctx.db.patch(args.id, { completedReps: undefined, updatedAt: Date.now() });
   },
 });
 
@@ -54,8 +54,9 @@ export const batchLogReps = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
     for (const set of args.sets) {
-      await ctx.db.patch(set.id, { completedReps: set.completedReps });
+      await ctx.db.patch(set.id, { completedReps: set.completedReps, updatedAt: now });
     }
   },
 });
@@ -67,6 +68,7 @@ export const createDirect = mutation({
     setNumber: v.number(),
     targetReps: v.string(),
     completedReps: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const setLogId = await ctx.db.insert("setLogs", {
@@ -74,6 +76,7 @@ export const createDirect = mutation({
       setNumber: args.setNumber,
       targetReps: args.targetReps,
       completedReps: args.completedReps,
+      updatedAt: args.updatedAt ?? Date.now(),
     });
 
     return setLogId;

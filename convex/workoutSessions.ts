@@ -119,12 +119,14 @@ export const start = mutation({
       throw new Error("Already have an in-progress workout session");
     }
 
+    const now = Date.now();
+
     // Create the session
     const sessionId = await ctx.db.insert("workoutSessions", {
       userId: args.userId,
       schemaId: args.schemaId,
       dayId: args.dayId,
-      startedAt: Date.now(),
+      startedAt: now,
       status: "in_progress",
     });
 
@@ -143,6 +145,7 @@ export const start = mutation({
         microplateUsed: 0,
         totalWeight: exercise.currentWeight,
         progressionEarned: false,
+        updatedAt: now,
       });
 
       // Create set logs
@@ -151,6 +154,7 @@ export const start = mutation({
           exerciseLogId,
           setNumber: i,
           targetReps: `${exercise.targetRepsMin}-${exercise.targetRepsMax}`,
+          updatedAt: now,
         });
       }
     }

@@ -33,7 +33,10 @@ export default defineSchema({
     schemaId: v.id("schemas"),
     name: v.string(),
     orderIndex: v.number(),
-  }).index("by_schema", ["schemaId"]),
+    updatedAt: v.number(),
+  })
+    .index("by_schema", ["schemaId"])
+    .index("by_schema_updated", ["schemaId", "updatedAt"]),
 
   // Exercise - an exercise within a workout day
   exercises: defineTable({
@@ -52,7 +55,10 @@ export default defineSchema({
     progressionIncrement: v.number(),
     currentWeight: v.number(),
     orderIndex: v.number(),
-  }).index("by_day", ["dayId"]),
+    updatedAt: v.number(),
+  })
+    .index("by_day", ["dayId"])
+    .index("by_day_updated", ["dayId", "updatedAt"]),
 
   // Workout Session - a single workout instance
   workoutSessions: defineTable({
@@ -83,10 +89,12 @@ export default defineSchema({
     microplateUsed: v.number(),
     totalWeight: v.number(),
     progressionEarned: v.boolean(),
+    updatedAt: v.number(),
   })
     .index("by_session", ["sessionId"])
     .index("by_exercise", ["exerciseId"])
-    .index("by_session_status", ["sessionId", "status"]),
+    .index("by_session_status", ["sessionId", "status"])
+    .index("by_session_updated", ["sessionId", "updatedAt"]),
 
   // Set Log - log of a single set within an exercise
   setLogs: defineTable({
@@ -94,5 +102,8 @@ export default defineSchema({
     setNumber: v.number(),
     targetReps: v.string(),
     completedReps: v.optional(v.number()),
-  }).index("by_exercise_log", ["exerciseLogId"]),
+    updatedAt: v.number(),
+  })
+    .index("by_exercise_log", ["exerciseLogId"])
+    .index("by_exercise_log_updated", ["exerciseLogId", "updatedAt"]),
 });

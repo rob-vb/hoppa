@@ -20,6 +20,7 @@ export interface WorkoutDay {
   schemaId: string;
   name: string;
   orderIndex: number;
+  updatedAt: number; // Unix timestamp for conflict resolution
 }
 
 // Exercise - an exercise within a workout day
@@ -36,6 +37,7 @@ export interface Exercise {
   progressionIncrement: number;
   currentWeight: number;
   orderIndex: number;
+  updatedAt: number; // Unix timestamp for conflict resolution
 }
 
 // Workout Session - a single workout instance
@@ -57,6 +59,7 @@ export interface ExerciseLog {
   microplateUsed: number;
   totalWeight: number;
   progressionEarned: boolean;
+  updatedAt: number; // Unix timestamp for conflict resolution
 }
 
 // Set Log - log of a single set within an exercise
@@ -66,6 +69,7 @@ export interface SetLog {
   setNumber: number;
   targetReps: string; // e.g., "6-8"
   completedReps: number | null;
+  updatedAt: number; // Unix timestamp for conflict resolution
 }
 
 // Extended types with relations for convenience

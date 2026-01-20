@@ -60,7 +60,7 @@ export const updateStatus = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { status: args.status });
+    await ctx.db.patch(args.id, { status: args.status, updatedAt: Date.now() });
   },
 });
 
@@ -75,6 +75,7 @@ export const updateWeight = mutation({
     await ctx.db.patch(args.id, {
       microplateUsed: args.microplateUsed,
       totalWeight: args.totalWeight,
+      updatedAt: Date.now(),
     });
   },
 });
@@ -86,7 +87,7 @@ export const markProgressionEarned = mutation({
     progressionEarned: v.boolean(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { progressionEarned: args.progressionEarned });
+    await ctx.db.patch(args.id, { progressionEarned: args.progressionEarned, updatedAt: Date.now() });
   },
 });
 
@@ -100,9 +101,12 @@ export const complete = mutation({
     const log = await ctx.db.get(args.id);
     if (!log) throw new Error("Exercise log not found");
 
+    const now = Date.now();
+
     await ctx.db.patch(args.id, {
       status: "completed",
       progressionEarned: args.progressionEarned,
+      updatedAt: now,
     });
 
     // If progression was earned, update the exercise's current weight
@@ -110,7 +114,7 @@ export const complete = mutation({
       const exercise = await ctx.db.get(log.exerciseId);
       if (exercise && exercise.progressiveLoadingEnabled) {
         const newWeight = exercise.currentWeight + exercise.progressionIncrement;
-        await ctx.db.patch(exercise._id, { currentWeight: newWeight });
+        await ctx.db.patch(exercise._id, { currentWeight: newWeight, updatedAt: now });
       }
     }
   },
@@ -120,7 +124,7 @@ export const complete = mutation({
 export const skip = mutation({
   args: { id: v.id("exerciseLogs") },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { status: "skipped" });
+    await ctx.db.patch(args.id, { status: "skipped", updatedAt: Date.now() });
   },
 });
 
@@ -137,6 +141,7 @@ export const createDirect = mutation({
     microplateUsed: v.number(),
     totalWeight: v.number(),
     progressionEarned: v.boolean(),
+    updatedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const exerciseLogId = await ctx.db.insert("exerciseLogs", {
@@ -146,6 +151,7 @@ export const createDirect = mutation({
       microplateUsed: args.microplateUsed,
       totalWeight: args.totalWeight,
       progressionEarned: args.progressionEarned,
+      updatedAt: args.updatedAt ?? Date.now(),
     });
 
     return exerciseLogId;

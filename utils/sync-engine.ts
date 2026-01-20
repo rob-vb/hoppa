@@ -81,6 +81,29 @@ export interface ConflictResolution {
   entityId: string;
 }
 
+export interface ConflictResult {
+  winner: 'local' | 'remote';
+  localTimestamp: number;
+  remoteTimestamp: number;
+}
+
+/**
+ * Resolves a conflict between local and remote data using last-write-wins strategy.
+ * Returns the winner based on timestamps.
+ *
+ * @param localUpdatedAt - Timestamp of the local record
+ * @param remoteUpdatedAt - Timestamp of the remote record
+ * @returns ConflictResult with the winner and both timestamps
+ */
+export function resolveConflict(localUpdatedAt: number, remoteUpdatedAt: number): ConflictResult {
+  const winner = remoteUpdatedAt > localUpdatedAt ? 'remote' : 'local';
+  return {
+    winner,
+    localTimestamp: localUpdatedAt,
+    remoteTimestamp: remoteUpdatedAt,
+  };
+}
+
 // ============================================
 // Sync Queue (In-Memory with Persistence)
 // ============================================
@@ -653,62 +676,64 @@ export class SyncEngine {
     let pulled = 0;
 
     try {
-      // Pull schemas
+      // Pull schemas with full conflict resolution
+      const schemaResult = await this.pullSchemas();
+      pulled += schemaResult.pulled;
+      errors.push(...schemaResult.errors);
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Pull failed';
+      errors.push(message);
+    }
+
+    return { pulled, errors };
+  }
+
+  /**
+   * Pull schemas with conflict resolution for schemas, days, and exercises.
+   * Uses last-write-wins strategy based on updatedAt timestamps.
+   */
+  private async pullSchemas(): Promise<{ pulled: number; errors: string[] }> {
+    if (!this.client || !this.userId) {
+      return { pulled: 0, errors: ['Not initialized'] };
+    }
+
+    const errors: string[] = [];
+    let pulled = 0;
+
+    try {
       const remoteSchemas = await this.client.query(api.schemas.list, {});
+
       for (const remote of remoteSchemas) {
         const localId = this.idMap.getLocalId(remote._id);
+
         if (!localId) {
           // New schema from remote - create locally
           const newLocal = await db.createSchema(remote.name, remote.progressiveLoadingEnabled);
           await this.idMap.set(newLocal.id, remote._id, 'schema');
           pulled++;
 
-          // Pull days and exercises for this schema
-          const remoteDays = await this.client.query(api.workoutDays.listBySchema, {
-            schemaId: remote._id,
-          });
-
-          for (const remoteDay of remoteDays) {
-            const newDay = await db.createWorkoutDay(
-              newLocal.id,
-              remoteDay.name,
-              remoteDay.orderIndex
-            );
-            await this.idMap.set(newDay.id, remoteDay._id, 'workoutDay');
-            pulled++;
-
-            // Pull exercises for this day
-            const remoteExercises = await this.client.query(api.exercises.listByDay, {
-              dayId: remoteDay._id,
-            });
-
-            for (const remoteExercise of remoteExercises) {
-              const newExercise = await db.createExercise({
-                dayId: newDay.id,
-                name: remoteExercise.name,
-                equipmentType: remoteExercise.equipmentType,
-                baseWeight: remoteExercise.baseWeight,
-                targetSets: remoteExercise.targetSets,
-                targetRepsMin: remoteExercise.targetRepsMin,
-                targetRepsMax: remoteExercise.targetRepsMax,
-                progressiveLoadingEnabled: remoteExercise.progressiveLoadingEnabled,
-                progressionIncrement: remoteExercise.progressionIncrement,
-                currentWeight: remoteExercise.currentWeight,
-                orderIndex: remoteExercise.orderIndex,
+          // Pull all days and exercises for this new schema
+          const dayResult = await this.pullDaysForSchema(remote._id, newLocal.id);
+          pulled += dayResult.pulled;
+          errors.push(...dayResult.errors);
+        } else {
+          // Existing schema - resolve conflict using last-write-wins
+          const local = await db.getSchemaById(localId);
+          if (local) {
+            const conflict = resolveConflict(local.updatedAt, remote.updatedAt);
+            if (conflict.winner === 'remote') {
+              await db.updateSchema(localId, {
+                name: remote.name,
+                progressiveLoadingEnabled: remote.progressiveLoadingEnabled,
               });
-              await this.idMap.set(newExercise.id, remoteExercise._id, 'exercise');
               pulled++;
             }
-          }
-        } else {
-          // Existing schema - check for updates using last-write-wins
-          const local = await db.getSchemaById(localId);
-          if (local && remote.updatedAt > local.updatedAt) {
-            await db.updateSchema(localId, {
-              name: remote.name,
-              progressiveLoadingEnabled: remote.progressiveLoadingEnabled,
-            });
-            pulled++;
+
+            // Always check for day updates regardless of schema conflict winner
+            const dayResult = await this.pullDaysForSchema(remote._id, localId);
+            pulled += dayResult.pulled;
+            errors.push(...dayResult.errors);
           }
         }
       }
@@ -730,7 +755,173 @@ export class SyncEngine {
         }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Pull failed';
+      const message = error instanceof Error ? error.message : 'Pull schemas failed';
+      errors.push(message);
+    }
+
+    return { pulled, errors };
+  }
+
+  /**
+   * Pull workout days for a schema with conflict resolution.
+   */
+  private async pullDaysForSchema(
+    remoteSchemaId: string,
+    localSchemaId: string
+  ): Promise<{ pulled: number; errors: string[] }> {
+    if (!this.client) {
+      return { pulled: 0, errors: ['Not initialized'] };
+    }
+
+    const errors: string[] = [];
+    let pulled = 0;
+
+    try {
+      const remoteDays = await this.client.query(api.workoutDays.listBySchema, {
+        schemaId: remoteSchemaId as Id<'schemas'>,
+      });
+
+      for (const remoteDay of remoteDays) {
+        const localDayId = this.idMap.getLocalId(remoteDay._id);
+
+        if (!localDayId) {
+          // New day from remote - create locally
+          const newDay = await db.createWorkoutDay(
+            localSchemaId,
+            remoteDay.name,
+            remoteDay.orderIndex
+          );
+          await this.idMap.set(newDay.id, remoteDay._id, 'workoutDay');
+          pulled++;
+
+          // Pull exercises for this new day
+          const exerciseResult = await this.pullExercisesForDay(remoteDay._id, newDay.id);
+          pulled += exerciseResult.pulled;
+          errors.push(...exerciseResult.errors);
+        } else {
+          // Existing day - resolve conflict using last-write-wins
+          const localDay = await db.getWorkoutDayById(localDayId);
+          if (localDay) {
+            const conflict = resolveConflict(localDay.updatedAt, remoteDay.updatedAt);
+            if (conflict.winner === 'remote') {
+              await db.updateWorkoutDay(localDayId, {
+                name: remoteDay.name,
+                orderIndex: remoteDay.orderIndex,
+              });
+              pulled++;
+            }
+
+            // Always check for exercise updates
+            const exerciseResult = await this.pullExercisesForDay(remoteDay._id, localDayId);
+            pulled += exerciseResult.pulled;
+            errors.push(...exerciseResult.errors);
+          }
+        }
+      }
+
+      // Check for remotely deleted days
+      const localDays = await db.getWorkoutDaysBySchema(localSchemaId);
+      for (const localDay of localDays) {
+        const convexId = this.idMap.getConvexId(localDay.id);
+        if (convexId) {
+          const stillExists = remoteDays.some(
+            (r: { _id: string }) => r._id === convexId
+          );
+          if (!stillExists) {
+            await db.deleteWorkoutDay(localDay.id);
+            await this.idMap.remove(localDay.id);
+            pulled++;
+          }
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Pull days failed';
+      errors.push(message);
+    }
+
+    return { pulled, errors };
+  }
+
+  /**
+   * Pull exercises for a workout day with conflict resolution.
+   */
+  private async pullExercisesForDay(
+    remoteDayId: string,
+    localDayId: string
+  ): Promise<{ pulled: number; errors: string[] }> {
+    if (!this.client) {
+      return { pulled: 0, errors: ['Not initialized'] };
+    }
+
+    const errors: string[] = [];
+    let pulled = 0;
+
+    try {
+      const remoteExercises = await this.client.query(api.exercises.listByDay, {
+        dayId: remoteDayId as Id<'workoutDays'>,
+      });
+
+      for (const remoteExercise of remoteExercises) {
+        const localExerciseId = this.idMap.getLocalId(remoteExercise._id);
+
+        if (!localExerciseId) {
+          // New exercise from remote - create locally
+          const newExercise = await db.createExercise({
+            dayId: localDayId,
+            name: remoteExercise.name,
+            equipmentType: remoteExercise.equipmentType,
+            baseWeight: remoteExercise.baseWeight,
+            targetSets: remoteExercise.targetSets,
+            targetRepsMin: remoteExercise.targetRepsMin,
+            targetRepsMax: remoteExercise.targetRepsMax,
+            progressiveLoadingEnabled: remoteExercise.progressiveLoadingEnabled,
+            progressionIncrement: remoteExercise.progressionIncrement,
+            currentWeight: remoteExercise.currentWeight,
+            orderIndex: remoteExercise.orderIndex,
+          });
+          await this.idMap.set(newExercise.id, remoteExercise._id, 'exercise');
+          pulled++;
+        } else {
+          // Existing exercise - resolve conflict using last-write-wins
+          const localExercise = await db.getExerciseById(localExerciseId);
+          if (localExercise) {
+            const conflict = resolveConflict(localExercise.updatedAt, remoteExercise.updatedAt);
+            if (conflict.winner === 'remote') {
+              await db.updateExercise(localExerciseId, {
+                name: remoteExercise.name,
+                equipmentType: remoteExercise.equipmentType,
+                baseWeight: remoteExercise.baseWeight,
+                targetSets: remoteExercise.targetSets,
+                targetRepsMin: remoteExercise.targetRepsMin,
+                targetRepsMax: remoteExercise.targetRepsMax,
+                progressiveLoadingEnabled: remoteExercise.progressiveLoadingEnabled,
+                progressionIncrement: remoteExercise.progressionIncrement,
+                currentWeight: remoteExercise.currentWeight,
+                orderIndex: remoteExercise.orderIndex,
+              });
+              pulled++;
+            }
+          }
+        }
+      }
+
+      // Check for remotely deleted exercises
+      const localExercises = await db.getExercisesByDay(localDayId);
+      for (const localExercise of localExercises) {
+        const convexId = this.idMap.getConvexId(localExercise.id);
+        if (convexId) {
+          const stillExists = remoteExercises.some(
+            (r: { _id: string }) => r._id === convexId
+          );
+          if (!stillExists) {
+            await db.deleteExercise(localExercise.id);
+            await this.idMap.remove(localExercise.id);
+            pulled++;
+          }
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Pull exercises failed';
       errors.push(message);
     }
 
@@ -928,6 +1119,7 @@ export class SyncEngine {
               microplateUsed: exerciseLog.microplateUsed,
               totalWeight: exerciseLog.totalWeight,
               progressionEarned: exerciseLog.progressionEarned,
+              updatedAt: exerciseLog.updatedAt,
             });
             await this.idMap.set(exerciseLog.id, exerciseLogConvexId, 'exerciseLog');
             pushed++;
@@ -942,6 +1134,7 @@ export class SyncEngine {
                   setNumber: setLog.setNumber,
                   targetReps: setLog.targetReps,
                   completedReps: setLog.completedReps ?? undefined,
+                  updatedAt: setLog.updatedAt,
                 });
                 await this.idMap.set(setLog.id, setLogConvexId, 'setLog');
                 pushed++;

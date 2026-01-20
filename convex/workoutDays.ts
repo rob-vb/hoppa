@@ -48,13 +48,16 @@ export const create = mutation({
     orderIndex: v.number(),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
+
     // Update schema's updatedAt
-    await ctx.db.patch(args.schemaId, { updatedAt: Date.now() });
+    await ctx.db.patch(args.schemaId, { updatedAt: now });
 
     return await ctx.db.insert("workoutDays", {
       schemaId: args.schemaId,
       name: args.name,
       orderIndex: args.orderIndex,
+      updatedAt: now,
     });
   },
 });
@@ -70,15 +73,16 @@ export const update = mutation({
     const day = await ctx.db.get(args.id);
     if (!day) throw new Error("Day not found");
 
+    const now = Date.now();
     const { id, ...updates } = args;
     const filteredUpdates = Object.fromEntries(
       Object.entries(updates).filter(([, v]) => v !== undefined)
     );
 
-    await ctx.db.patch(id, filteredUpdates);
+    await ctx.db.patch(id, { ...filteredUpdates, updatedAt: now });
 
     // Update schema's updatedAt
-    await ctx.db.patch(day.schemaId, { updatedAt: Date.now() });
+    await ctx.db.patch(day.schemaId, { updatedAt: now });
   },
 });
 
@@ -114,10 +118,12 @@ export const reorder = mutation({
     dayIds: v.array(v.id("workoutDays")),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
+
     for (let i = 0; i < args.dayIds.length; i++) {
-      await ctx.db.patch(args.dayIds[i], { orderIndex: i });
+      await ctx.db.patch(args.dayIds[i], { orderIndex: i, updatedAt: now });
     }
 
-    await ctx.db.patch(args.schemaId, { updatedAt: Date.now() });
+    await ctx.db.patch(args.schemaId, { updatedAt: now });
   },
 });

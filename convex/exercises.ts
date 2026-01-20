@@ -44,12 +44,16 @@ export const create = mutation({
     const day = await ctx.db.get(args.dayId);
     if (!day) throw new Error("Day not found");
 
-    // Update schema's updatedAt
-    await ctx.db.patch(day.schemaId, { updatedAt: Date.now() });
+    const now = Date.now();
+
+    // Update schema's updatedAt and day's updatedAt
+    await ctx.db.patch(day.schemaId, { updatedAt: now });
+    await ctx.db.patch(args.dayId, { updatedAt: now });
 
     return await ctx.db.insert("exercises", {
       ...args,
       currentWeight: args.baseWeight,
+      updatedAt: now,
     });
   },
 });
@@ -78,15 +82,17 @@ export const update = mutation({
     const day = await ctx.db.get(exercise.dayId);
     if (!day) throw new Error("Day not found");
 
+    const now = Date.now();
     const { id, ...updates } = args;
     const filteredUpdates = Object.fromEntries(
       Object.entries(updates).filter(([, v]) => v !== undefined)
     );
 
-    await ctx.db.patch(id, filteredUpdates);
+    await ctx.db.patch(id, { ...filteredUpdates, updatedAt: now });
 
-    // Update schema's updatedAt
-    await ctx.db.patch(day.schemaId, { updatedAt: Date.now() });
+    // Update day's and schema's updatedAt
+    await ctx.db.patch(exercise.dayId, { updatedAt: now });
+    await ctx.db.patch(day.schemaId, { updatedAt: now });
   },
 });
 
@@ -117,11 +123,14 @@ export const reorder = mutation({
     const day = await ctx.db.get(args.dayId);
     if (!day) throw new Error("Day not found");
 
+    const now = Date.now();
+
     for (let i = 0; i < args.exerciseIds.length; i++) {
-      await ctx.db.patch(args.exerciseIds[i], { orderIndex: i });
+      await ctx.db.patch(args.exerciseIds[i], { orderIndex: i, updatedAt: now });
     }
 
-    await ctx.db.patch(day.schemaId, { updatedAt: Date.now() });
+    await ctx.db.patch(args.dayId, { updatedAt: now });
+    await ctx.db.patch(day.schemaId, { updatedAt: now });
   },
 });
 
@@ -135,6 +144,6 @@ export const applyProgression = mutation({
     const exercise = await ctx.db.get(args.id);
     if (!exercise) throw new Error("Exercise not found");
 
-    await ctx.db.patch(args.id, { currentWeight: args.newWeight });
+    await ctx.db.patch(args.id, { currentWeight: args.newWeight, updatedAt: Date.now() });
   },
 });

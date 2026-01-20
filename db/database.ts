@@ -55,7 +55,8 @@ async function initializeTables(): Promise<void> {
       id TEXT PRIMARY KEY,
       schema_id TEXT NOT NULL REFERENCES schemas(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
-      order_index INTEGER NOT NULL
+      order_index INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL DEFAULT 0
     );
 
     -- Exercises
@@ -71,7 +72,8 @@ async function initializeTables(): Promise<void> {
       progressive_loading_enabled INTEGER NOT NULL DEFAULT 1,
       progression_increment REAL NOT NULL DEFAULT 2.5,
       current_weight REAL NOT NULL DEFAULT 0,
-      order_index INTEGER NOT NULL
+      order_index INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL DEFAULT 0
     );
 
     -- Workout Sessions
@@ -92,7 +94,8 @@ async function initializeTables(): Promise<void> {
       status TEXT NOT NULL CHECK (status IN ('pending', 'completed', 'skipped')),
       microplate_used REAL NOT NULL DEFAULT 0,
       total_weight REAL NOT NULL,
-      progression_earned INTEGER NOT NULL DEFAULT 0
+      progression_earned INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL DEFAULT 0
     );
 
     -- Set Logs
@@ -101,7 +104,8 @@ async function initializeTables(): Promise<void> {
       exercise_log_id TEXT NOT NULL REFERENCES exercise_logs(id) ON DELETE CASCADE,
       set_number INTEGER NOT NULL,
       target_reps TEXT NOT NULL,
-      completed_reps INTEGER
+      completed_reps INTEGER,
+      updated_at INTEGER NOT NULL DEFAULT 0
     );
 
     -- Indexes for common queries
@@ -245,6 +249,7 @@ export async function createWorkoutDay(
 ): Promise<WorkoutDay> {
   const database = await getDatabase();
   const id = generateId();
+  const now = Date.now();
 
   // If orderIndex not provided, calculate from existing days to avoid race conditions
   let actualOrderIndex = orderIndex;
@@ -257,18 +262,18 @@ export async function createWorkoutDay(
   }
 
   await database.runAsync(
-    `INSERT INTO workout_days (id, schema_id, name, order_index)
-     VALUES (?, ?, ?, ?)`,
-    [id, schemaId, name, actualOrderIndex]
+    `INSERT INTO workout_days (id, schema_id, name, order_index, updated_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [id, schemaId, name, actualOrderIndex, now]
   );
 
   // Update schema's updated_at
   await database.runAsync(
     'UPDATE schemas SET updated_at = ? WHERE id = ?',
-    [Date.now(), schemaId]
+    [now, schemaId]
   );
 
-  return { id, schemaId, name, orderIndex: actualOrderIndex };
+  return { id, schemaId, name, orderIndex: actualOrderIndex, updatedAt: now };
 }
 
 export async function getWorkoutDaysBySchema(schemaId: string): Promise<WorkoutDay[]> {
@@ -278,6 +283,7 @@ export async function getWorkoutDaysBySchema(schemaId: string): Promise<WorkoutD
     schema_id: string;
     name: string;
     order_index: number;
+    updated_at: number;
   }>('SELECT * FROM workout_days WHERE schema_id = ? ORDER BY order_index', [schemaId]);
 
   return rows.map((row) => ({
@@ -285,6 +291,7 @@ export async function getWorkoutDaysBySchema(schemaId: string): Promise<WorkoutD
     schemaId: row.schema_id,
     name: row.name,
     orderIndex: row.order_index,
+    updatedAt: row.updated_at,
   }));
 }
 
@@ -295,6 +302,7 @@ export async function getWorkoutDayById(id: string): Promise<WorkoutDay | null> 
     schema_id: string;
     name: string;
     order_index: number;
+    updated_at: number;
   }>('SELECT * FROM workout_days WHERE id = ?', [id]);
 
   if (!row) return null;
@@ -304,6 +312,7 @@ export async function getWorkoutDayById(id: string): Promise<WorkoutDay | null> 
     schemaId: row.schema_id,
     name: row.name,
     orderIndex: row.order_index,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -312,8 +321,9 @@ export async function updateWorkoutDay(
   updates: Partial<Pick<WorkoutDay, 'name' | 'orderIndex'>>
 ): Promise<void> {
   const database = await getDatabase();
-  const setClauses: string[] = [];
-  const values: (string | number)[] = [];
+  const now = Date.now();
+  const setClauses: string[] = ['updated_at = ?'];
+  const values: (string | number)[] = [now];
 
   if (updates.name !== undefined) {
     setClauses.push('name = ?');
@@ -323,8 +333,6 @@ export async function updateWorkoutDay(
     setClauses.push('order_index = ?');
     values.push(updates.orderIndex);
   }
-
-  if (setClauses.length === 0) return;
 
   values.push(id);
   await database.runAsync(
@@ -342,9 +350,10 @@ export async function deleteWorkoutDay(id: string): Promise<void> {
 // Exercise Operations
 // ============================================
 
-export async function createExercise(exercise: Omit<Exercise, 'id'> & { orderIndex?: number }): Promise<Exercise> {
+export async function createExercise(exercise: Omit<Exercise, 'id' | 'updatedAt'> & { orderIndex?: number }): Promise<Exercise> {
   const database = await getDatabase();
   const id = generateId();
+  const now = Date.now();
 
   // If orderIndex not provided, calculate from existing exercises to avoid race conditions
   let actualOrderIndex = exercise.orderIndex;
@@ -359,8 +368,8 @@ export async function createExercise(exercise: Omit<Exercise, 'id'> & { orderInd
   await database.runAsync(
     `INSERT INTO exercises (id, day_id, name, equipment_type, base_weight, target_sets,
      target_reps_min, target_reps_max, progressive_loading_enabled, progression_increment,
-     current_weight, order_index)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     current_weight, order_index, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       exercise.dayId,
@@ -374,10 +383,11 @@ export async function createExercise(exercise: Omit<Exercise, 'id'> & { orderInd
       exercise.progressionIncrement,
       exercise.currentWeight,
       actualOrderIndex,
+      now,
     ]
   );
 
-  return { id, ...exercise, orderIndex: actualOrderIndex };
+  return { id, ...exercise, orderIndex: actualOrderIndex, updatedAt: now };
 }
 
 export async function getExercisesByDay(dayId: string): Promise<Exercise[]> {
@@ -395,6 +405,7 @@ export async function getExercisesByDay(dayId: string): Promise<Exercise[]> {
     progression_increment: number;
     current_weight: number;
     order_index: number;
+    updated_at: number;
   }>('SELECT * FROM exercises WHERE day_id = ? ORDER BY order_index', [dayId]);
 
   return rows.map((row) => ({
@@ -410,6 +421,7 @@ export async function getExercisesByDay(dayId: string): Promise<Exercise[]> {
     progressionIncrement: row.progression_increment,
     currentWeight: row.current_weight,
     orderIndex: row.order_index,
+    updatedAt: row.updated_at,
   }));
 }
 
@@ -428,6 +440,7 @@ export async function getExerciseById(id: string): Promise<Exercise | null> {
     progression_increment: number;
     current_weight: number;
     order_index: number;
+    updated_at: number;
   }>('SELECT * FROM exercises WHERE id = ?', [id]);
 
   if (!row) return null;
@@ -445,6 +458,7 @@ export async function getExerciseById(id: string): Promise<Exercise | null> {
     progressionIncrement: row.progression_increment,
     currentWeight: row.current_weight,
     orderIndex: row.order_index,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -453,8 +467,9 @@ export async function updateExercise(
   updates: Partial<Omit<Exercise, 'id' | 'dayId'>>
 ): Promise<void> {
   const database = await getDatabase();
-  const setClauses: string[] = [];
-  const values: (string | number)[] = [];
+  const now = Date.now();
+  const setClauses: string[] = ['updated_at = ?'];
+  const values: (string | number)[] = [now];
 
   if (updates.name !== undefined) {
     setClauses.push('name = ?');
@@ -496,8 +511,6 @@ export async function updateExercise(
     setClauses.push('order_index = ?');
     values.push(updates.orderIndex);
   }
-
-  if (setClauses.length === 0) return;
 
   values.push(id);
   await database.runAsync(
@@ -666,11 +679,12 @@ export async function createExerciseLog(
 ): Promise<ExerciseLog> {
   const database = await getDatabase();
   const id = generateId();
+  const now = Date.now();
 
   await database.runAsync(
-    `INSERT INTO exercise_logs (id, session_id, exercise_id, status, microplate_used, total_weight, progression_earned)
-     VALUES (?, ?, ?, 'pending', ?, ?, 0)`,
-    [id, sessionId, exerciseId, microplateUsed, totalWeight]
+    `INSERT INTO exercise_logs (id, session_id, exercise_id, status, microplate_used, total_weight, progression_earned, updated_at)
+     VALUES (?, ?, ?, 'pending', ?, ?, 0, ?)`,
+    [id, sessionId, exerciseId, microplateUsed, totalWeight, now]
   );
 
   return {
@@ -681,6 +695,7 @@ export async function createExerciseLog(
     microplateUsed,
     totalWeight,
     progressionEarned: false,
+    updatedAt: now,
   };
 }
 
@@ -694,6 +709,7 @@ export async function getExerciseLogsBySession(sessionId: string): Promise<Exerc
     microplate_used: number;
     total_weight: number;
     progression_earned: number;
+    updated_at: number;
   }>('SELECT * FROM exercise_logs WHERE session_id = ?', [sessionId]);
 
   return rows.map((row) => ({
@@ -704,6 +720,7 @@ export async function getExerciseLogsBySession(sessionId: string): Promise<Exerc
     microplateUsed: row.microplate_used,
     totalWeight: row.total_weight,
     progressionEarned: row.progression_earned === 1,
+    updatedAt: row.updated_at,
   }));
 }
 
@@ -717,6 +734,7 @@ export async function getExerciseLogById(id: string): Promise<ExerciseLog | null
     microplate_used: number;
     total_weight: number;
     progression_earned: number;
+    updated_at: number;
   }>('SELECT * FROM exercise_logs WHERE id = ?', [id]);
 
   if (!row) return null;
@@ -729,6 +747,7 @@ export async function getExerciseLogById(id: string): Promise<ExerciseLog | null
     microplateUsed: row.microplate_used,
     totalWeight: row.total_weight,
     progressionEarned: row.progression_earned === 1,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -737,8 +756,9 @@ export async function updateExerciseLog(
   updates: Partial<Pick<ExerciseLog, 'status' | 'microplateUsed' | 'totalWeight' | 'progressionEarned'>>
 ): Promise<void> {
   const database = await getDatabase();
-  const setClauses: string[] = [];
-  const values: (string | number)[] = [];
+  const now = Date.now();
+  const setClauses: string[] = ['updated_at = ?'];
+  const values: (string | number)[] = [now];
 
   if (updates.status !== undefined) {
     setClauses.push('status = ?');
@@ -756,8 +776,6 @@ export async function updateExerciseLog(
     setClauses.push('progression_earned = ?');
     values.push(updates.progressionEarned ? 1 : 0);
   }
-
-  if (setClauses.length === 0) return;
 
   values.push(id);
   await database.runAsync(
@@ -777,11 +795,12 @@ export async function createSetLog(
 ): Promise<SetLog> {
   const database = await getDatabase();
   const id = generateId();
+  const now = Date.now();
 
   await database.runAsync(
-    `INSERT INTO set_logs (id, exercise_log_id, set_number, target_reps, completed_reps)
-     VALUES (?, ?, ?, ?, NULL)`,
-    [id, exerciseLogId, setNumber, targetReps]
+    `INSERT INTO set_logs (id, exercise_log_id, set_number, target_reps, completed_reps, updated_at)
+     VALUES (?, ?, ?, ?, NULL, ?)`,
+    [id, exerciseLogId, setNumber, targetReps, now]
   );
 
   return {
@@ -790,6 +809,7 @@ export async function createSetLog(
     setNumber,
     targetReps,
     completedReps: null,
+    updatedAt: now,
   };
 }
 
@@ -801,6 +821,7 @@ export async function getSetLogsByExerciseLog(exerciseLogId: string): Promise<Se
     set_number: number;
     target_reps: string;
     completed_reps: number | null;
+    updated_at: number;
   }>('SELECT * FROM set_logs WHERE exercise_log_id = ? ORDER BY set_number', [exerciseLogId]);
 
   return rows.map((row) => ({
@@ -809,13 +830,15 @@ export async function getSetLogsByExerciseLog(exerciseLogId: string): Promise<Se
     setNumber: row.set_number,
     targetReps: row.target_reps,
     completedReps: row.completed_reps,
+    updatedAt: row.updated_at,
   }));
 }
 
 export async function updateSetLog(id: string, completedReps: number | null): Promise<void> {
   const database = await getDatabase();
-  await database.runAsync('UPDATE set_logs SET completed_reps = ? WHERE id = ?', [
+  await database.runAsync('UPDATE set_logs SET completed_reps = ?, updated_at = ? WHERE id = ?', [
     completedReps,
+    Date.now(),
     id,
   ]);
 }
@@ -973,6 +996,7 @@ export async function getWorkoutDaysByIds(
     schema_id: string;
     name: string;
     order_index: number;
+    updated_at: number;
   }>(`SELECT * FROM workout_days WHERE id IN (${placeholders})`, uniqueIds);
 
   const result = new Map<string, WorkoutDay>();
@@ -982,6 +1006,7 @@ export async function getWorkoutDaysByIds(
       schemaId: row.schema_id,
       name: row.name,
       orderIndex: row.order_index,
+      updatedAt: row.updated_at,
     });
   }
   return result;
