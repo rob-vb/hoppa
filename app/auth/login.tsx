@@ -16,11 +16,12 @@ import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/contexts/auth-context';
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -43,6 +44,24 @@ export default function LoginScreen() {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setIsGoogleSubmitting(true);
+    try {
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      await signInWithGoogle();
+    } catch {
+      setError('Failed to sign in with Google');
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } finally {
+      setIsGoogleSubmitting(false);
     }
   };
 
@@ -100,12 +119,30 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={[styles.button, isSubmitting && styles.buttonDisabled]}
             onPress={handleSignIn}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isGoogleSubmitting}
           >
             {isSubmitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <ThemedText style={styles.buttonText}>Sign In</ThemedText>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <ThemedText style={styles.dividerText}>or</ThemedText>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.googleButton, isGoogleSubmitting && styles.buttonDisabled]}
+            onPress={handleGoogleSignIn}
+            disabled={isSubmitting || isGoogleSubmitting}
+          >
+            {isGoogleSubmitting ? (
+              <ActivityIndicator color="#1F2937" />
+            ) : (
+              <ThemedText style={styles.googleButtonText}>Continue with Google</ThemedText>
             )}
           </TouchableOpacity>
 
@@ -186,6 +223,32 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#374151',
+  },
+  dividerText: {
+    color: '#9CA3AF',
+    paddingHorizontal: 16,
+    fontSize: 14,
+  },
+  googleButton: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  googleButtonText: {
+    color: '#1F2937',
     fontSize: 16,
     fontWeight: '600',
   },

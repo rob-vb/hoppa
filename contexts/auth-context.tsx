@@ -10,6 +10,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -42,6 +43,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await convexSignIn("password", params);
   };
 
+  const signInWithGoogle = async () => {
+    await convexSignIn("google");
+  };
+
   const signOut = async () => {
     await convexSignOut();
   };
@@ -54,6 +59,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isAuthenticated,
         signIn,
         signUp,
+        signInWithGoogle,
         signOut,
       }}
     >
