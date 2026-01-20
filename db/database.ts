@@ -1313,6 +1313,7 @@ export interface ExerciseProgressData {
   currentWeight: number;
   startingWeight: number;
   progressionCount: number;
+  progressionDates: number[];
   weightHistory: Array<{
     date: number;
     weight: number;
@@ -1363,15 +1364,19 @@ export async function getExercisesWithProgress(): Promise<ExerciseProgressData[]
       [exercise.exercise_id]
     );
 
-    // Get progression count
-    const progressionResult = await database.getFirstAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM exercise_logs el
+    // Get progression dates
+    const progressionRows = await database.getAllAsync<{ completed_at: number }>(
+      `SELECT ws.completed_at
+       FROM exercise_logs el
        JOIN workout_sessions ws ON el.session_id = ws.id
        WHERE el.exercise_id = ?
        AND el.progression_earned = 1
-       AND ws.status = 'completed'`,
+       AND ws.status = 'completed'
+       ORDER BY ws.completed_at ASC`,
       [exercise.exercise_id]
     );
+
+    const progressionDates = progressionRows.map((row) => row.completed_at);
 
     const weightHistory = historyRows.map((row) => ({
       date: row.completed_at,
@@ -1389,7 +1394,8 @@ export async function getExercisesWithProgress(): Promise<ExerciseProgressData[]
       schemaName: exercise.schema_name,
       currentWeight: exercise.current_weight,
       startingWeight,
-      progressionCount: progressionResult?.count ?? 0,
+      progressionCount: progressionDates.length,
+      progressionDates,
       weightHistory,
     });
   }

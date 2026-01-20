@@ -336,13 +336,23 @@ export default function DashboardScreen() {
                 currentWeight={selectedExercise.currentWeight}
               />
 
-              {/* Progressions Count */}
+              {/* Progressions Stats */}
               <View style={styles.progressionsRow}>
-                <MaterialIcons name="emoji-events" size={18} color={Colors.dark.primary} />
-                <ThemedText style={styles.progressionsText}>
-                  {selectedExercise.progressionCount} progression
-                  {selectedExercise.progressionCount !== 1 ? 's' : ''} earned
-                </ThemedText>
+                <View style={styles.progressionStat}>
+                  <MaterialIcons name="emoji-events" size={18} color={Colors.dark.primary} />
+                  <ThemedText style={styles.progressionsText}>
+                    {selectedExercise.progressionCount} progression
+                    {selectedExercise.progressionCount !== 1 ? 's' : ''}
+                  </ThemedText>
+                </View>
+                {selectedExercise.progressionCount >= 2 && (
+                  <View style={styles.progressionStat}>
+                    <MaterialIcons name="schedule" size={18} color={Colors.dark.textSecondary} />
+                    <ThemedText style={styles.progressionsText}>
+                      {formatAverageTime(selectedExercise.progressionDates)} avg
+                    </ThemedText>
+                  </View>
+                )}
               </View>
             </>
           ) : (
@@ -498,6 +508,28 @@ function formatVolume(volume: number): string {
   return volume.toString();
 }
 
+function formatAverageTime(progressionDates: number[]): string {
+  if (progressionDates.length < 2) return '';
+
+  // Calculate average time between progressions
+  let totalMs = 0;
+  for (let i = 1; i < progressionDates.length; i++) {
+    totalMs += progressionDates[i] - progressionDates[i - 1];
+  }
+  const avgMs = totalMs / (progressionDates.length - 1);
+  const avgDays = Math.round(avgMs / (1000 * 60 * 60 * 24));
+
+  if (avgDays < 7) {
+    return `${avgDays}d`;
+  } else if (avgDays < 30) {
+    const weeks = Math.round(avgDays / 7 * 10) / 10;
+    return `${weeks}w`;
+  } else {
+    const months = Math.round(avgDays / 30 * 10) / 10;
+    return `${months}mo`;
+  }
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -648,11 +680,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 20,
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: Colors.dark.border,
+  },
+  progressionStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   progressionsText: {
     fontSize: 14,
