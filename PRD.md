@@ -57,7 +57,7 @@
 - [x] Add auto-advance to next set after input
 - [x] Show visual feedback (checkmark) when rep meets target
 - [x] Implement Skip exercise functionality
-- [ ] Implement Finish exercise functionality
+- [x] Implement Finish exercise functionality
 - [ ] Show workout progress bar (exercise X of Y)
 - [ ] Add workout timer display
 - [ ] Implement End Workout flow

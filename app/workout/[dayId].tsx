@@ -205,7 +205,7 @@ export default function ActiveWorkoutScreen() {
   const completedSets = getCompletedSetsCount(currentExerciseLog.id);
   const totalSets = sets.length;
   const isCurrentExerciseComplete = isExerciseComplete(currentExerciseLog.id);
-  const allSetsCompleted = completedSets === totalSets;
+  const someSetsCompleted = completedSets > 0;
 
   // Calculate overall workout progress
   const completedExercises = exerciseLogs.filter(
@@ -284,9 +284,9 @@ export default function ActiveWorkoutScreen() {
           {!isCurrentExerciseComplete ? (
             <>
               <Button
-                title="Complete Exercise"
+                title="Finish Exercise"
                 onPress={handleCompleteExercise}
-                disabled={!allSetsCompleted}
+                disabled={!someSetsCompleted}
                 fullWidth
               />
               <Button
