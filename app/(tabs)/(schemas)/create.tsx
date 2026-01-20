@@ -19,9 +19,11 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { IncrementSelector } from '@/components/ui/increment-selector';
+import { ExerciseSelectorModal } from '@/components/ui/exercise-selector-modal';
 import { useSchemaStore } from '@/stores/schema-store';
 import { Colors } from '@/constants/theme';
 import { EquipmentType } from '@/db/types';
+import type { ExerciseTemplate } from '@/constants/exercise-library';
 
 interface LocalExercise {
   id: string;
@@ -85,6 +87,7 @@ export default function CreateSchemaScreen() {
   const [days, setDays] = useState<LocalWorkoutDay[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [exerciseSelectorDayId, setExerciseSelectorDayId] = useState<string | null>(null);
 
   const handleAddDay = () => {
     if (Platform.OS === 'ios') {
@@ -152,6 +155,37 @@ export default function CreateSchemaScreen() {
     setDays(
       days.map((d) =>
         d.id === dayId ? { ...d, exercises: [...d.exercises, createEmptyExercise()] } : d
+      )
+    );
+  };
+
+  const handleOpenExerciseSelector = (dayId: string) => {
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setExerciseSelectorDayId(dayId);
+  };
+
+  const handleSelectExerciseFromLibrary = (exercise: ExerciseTemplate) => {
+    if (!exerciseSelectorDayId) return;
+
+    const newExercise: LocalExercise = {
+      id: generateId(),
+      name: exercise.name,
+      equipmentType: exercise.equipmentType,
+      baseWeight: exercise.defaultWeight.toString(),
+      targetSets: exercise.defaultSets.toString(),
+      targetRepsMin: exercise.defaultRepsMin.toString(),
+      targetRepsMax: exercise.defaultRepsMax.toString(),
+      progressiveLoadingEnabled: true,
+      progressionIncrement: exercise.defaultProgressionIncrement.toString(),
+    };
+
+    setDays(
+      days.map((d) =>
+        d.id === exerciseSelectorDayId
+          ? { ...d, exercises: [...d.exercises, newExercise] }
+          : d
       )
     );
   };
@@ -593,12 +627,26 @@ export default function CreateSchemaScreen() {
             renderExercise(day.id, exercise, exerciseIndex, day.exercises.length)
           )}
 
-          <Button
-            title="Add Exercise"
-            variant="secondary"
-            onPress={() => handleAddExercise(day.id)}
-            fullWidth
-          />
+          <View style={styles.addExerciseButtons}>
+            <Pressable
+              style={styles.addExerciseButton}
+              onPress={() => handleOpenExerciseSelector(day.id)}
+            >
+              <IconSymbol name="list.bullet" size={18} color={Colors.dark.primary} />
+              <ThemedText style={styles.addExerciseButtonText}>
+                From Library
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              style={styles.addExerciseButton}
+              onPress={() => handleAddExercise(day.id)}
+            >
+              <IconSymbol name="plus" size={18} color={Colors.dark.primary} />
+              <ThemedText style={styles.addExerciseButtonText}>
+                Custom
+              </ThemedText>
+            </Pressable>
+          </View>
         </View>
       )}
     </Card>
@@ -606,6 +654,11 @@ export default function CreateSchemaScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <ExerciseSelectorModal
+        visible={exerciseSelectorDayId !== null}
+        onClose={() => setExerciseSelectorDayId(null)}
+        onSelect={handleSelectExerciseFromLibrary}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -872,5 +925,27 @@ const styles = StyleSheet.create({
   },
   bottomActions: {
     marginTop: 8,
+  },
+  addExerciseButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  addExerciseButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    backgroundColor: 'transparent',
+  },
+  addExerciseButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.dark.primary,
   },
 });
