@@ -1,0 +1,793 @@
+import { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  Platform,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+
+import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useWorkoutStore } from '@/stores/workout-store';
+import { Colors } from '@/constants/theme';
+import { SetLog } from '@/db/types';
+
+const REP_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20];
+
+export default function ActiveWorkoutScreen() {
+  useLocalSearchParams<{ dayId: string }>();
+  const router = useRouter();
+
+  const {
+    session,
+    exerciseLogs,
+    currentExerciseIndex,
+    isLoading,
+    error,
+    setCurrentExercise,
+    nextExercise,
+    previousExercise,
+    logReps,
+    completeExercise,
+    skipExercise,
+    completeWorkout,
+    cancelWorkout,
+    getCurrentExerciseLog,
+    isExerciseComplete,
+    getCompletedSetsCount,
+  } = useWorkoutStore();
+
+  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
+
+  const currentExerciseLog = getCurrentExerciseLog();
+
+  // Auto-select first incomplete set when exercise changes
+  useEffect(() => {
+    if (currentExerciseLog) {
+      const firstIncompleteSet = currentExerciseLog.sets.find(
+        (s) => s.completedReps === null
+      );
+      setSelectedSetId(firstIncompleteSet?.id ?? currentExerciseLog.sets[0]?.id ?? null);
+    }
+  }, [currentExerciseIndex, currentExerciseLog]);
+
+  const handleRepSelect = useCallback(
+    async (reps: number) => {
+      if (!selectedSetId) return;
+
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+
+      await logReps(selectedSetId, reps);
+
+      // Auto-advance to next incomplete set
+      if (currentExerciseLog) {
+        const currentSetIndex = currentExerciseLog.sets.findIndex(
+          (s) => s.id === selectedSetId
+        );
+        const nextIncompleteSet = currentExerciseLog.sets.find(
+          (s, i) => i > currentSetIndex && s.completedReps === null
+        );
+        if (nextIncompleteSet) {
+          setSelectedSetId(nextIncompleteSet.id);
+        }
+      }
+    },
+    [selectedSetId, logReps, currentExerciseLog]
+  );
+
+  const handleCompleteExercise = useCallback(async () => {
+    if (!currentExerciseLog) return;
+
+    if (Platform.OS === 'ios') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+
+    await completeExercise(currentExerciseLog.id);
+
+    // Auto-advance to next exercise
+    if (currentExerciseIndex < exerciseLogs.length - 1) {
+      nextExercise();
+    }
+  }, [currentExerciseLog, completeExercise, currentExerciseIndex, exerciseLogs.length, nextExercise]);
+
+  const handleSkipExercise = useCallback(async () => {
+    if (!currentExerciseLog) return;
+
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+
+    await skipExercise(currentExerciseLog.id);
+
+    // Auto-advance to next exercise
+    if (currentExerciseIndex < exerciseLogs.length - 1) {
+      nextExercise();
+    }
+  }, [currentExerciseLog, skipExercise, currentExerciseIndex, exerciseLogs.length, nextExercise]);
+
+  const handleFinishWorkout = useCallback(async () => {
+    Alert.alert(
+      'Finish Workout',
+      'Are you sure you want to finish this workout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Finish',
+          onPress: async () => {
+            if (Platform.OS === 'ios') {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+            await completeWorkout();
+            router.back();
+          },
+        },
+      ]
+    );
+  }, [completeWorkout, router]);
+
+  const handleCancelWorkout = useCallback(() => {
+    Alert.alert(
+      'Cancel Workout',
+      'Are you sure you want to cancel? All progress will be lost.',
+      [
+        { text: 'Keep Going', style: 'cancel' },
+        {
+          text: 'Cancel Workout',
+          style: 'destructive',
+          onPress: async () => {
+            await cancelWorkout();
+            router.back();
+          },
+        },
+      ]
+    );
+  }, [cancelWorkout, router]);
+
+  const handleClose = useCallback(() => {
+    // If workout is in progress, ask to confirm
+    if (session) {
+      Alert.alert(
+        'Leave Workout',
+        'Your workout will remain active. You can resume it later.',
+        [
+          { text: 'Stay', style: 'cancel' },
+          {
+            text: 'Leave',
+            onPress: () => router.back(),
+          },
+        ]
+      );
+    } else {
+      router.back();
+    }
+  }, [session, router]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.dark.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!session || !currentExerciseLog) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <ThemedText style={styles.errorText}>
+            {error || 'No active workout session'}
+          </ThemedText>
+          <Button title="Go Back" onPress={() => router.back()} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const { exercise, sets, status, progressionEarned } = currentExerciseLog;
+  const completedSets = getCompletedSetsCount(currentExerciseLog.id);
+  const totalSets = sets.length;
+  const isCurrentExerciseComplete = isExerciseComplete(currentExerciseLog.id);
+  const allSetsCompleted = completedSets === totalSets;
+
+  // Calculate overall workout progress
+  const completedExercises = exerciseLogs.filter(
+    (log) => log.status === 'completed' || log.status === 'skipped'
+  ).length;
+  const totalExercises = exerciseLogs.length;
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable onPress={handleClose} hitSlop={12}>
+          <IconSymbol name="xmark" size={24} color={Colors.dark.text} />
+        </Pressable>
+
+        <View style={styles.headerCenter}>
+          <ThemedText style={styles.headerProgress}>
+            Exercise {currentExerciseIndex + 1} of {totalExercises}
+          </ThemedText>
+        </View>
+
+        <Pressable onPress={handleCancelWorkout} hitSlop={12}>
+          <ThemedText style={styles.cancelText}>Cancel</ThemedText>
+        </Pressable>
+      </View>
+
+      {/* Progress Bar */}
+      <View style={styles.progressBarContainer}>
+        <View
+          style={[
+            styles.progressBar,
+            { width: `${(completedExercises / totalExercises) * 100}%` },
+          ]}
+        />
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Exercise Info */}
+        <View style={styles.exerciseHeader}>
+          <ThemedText type="title" style={styles.exerciseName}>
+            {exercise.name}
+          </ThemedText>
+          <View style={styles.exerciseMeta}>
+            <View style={styles.metaItem}>
+              <IconSymbol
+                name="scalemass.fill"
+                size={16}
+                color={Colors.dark.textSecondary}
+              />
+              <ThemedText style={styles.metaText}>
+                {currentExerciseLog.totalWeight} kg
+              </ThemedText>
+            </View>
+            <View style={styles.metaItem}>
+              <IconSymbol
+                name="arrow.trianglehead.2.clockwise"
+                size={16}
+                color={Colors.dark.textSecondary}
+              />
+              <ThemedText style={styles.metaText}>
+                {exercise.targetRepsMin}-{exercise.targetRepsMax} reps
+              </ThemedText>
+            </View>
+          </View>
+
+          {isCurrentExerciseComplete && progressionEarned && (
+            <View style={styles.progressionBadge}>
+              <IconSymbol name="arrow.up.circle.fill" size={16} color="#22C55E" />
+              <ThemedText style={styles.progressionText}>
+                Progression earned! +{exercise.progressionIncrement}kg next time
+              </ThemedText>
+            </View>
+          )}
+        </View>
+
+        {/* Sets */}
+        <View style={styles.setsSection}>
+          <ThemedText style={styles.sectionLabel}>
+            Sets ({completedSets}/{totalSets})
+          </ThemedText>
+
+          <View style={styles.setsGrid}>
+            {sets.map((set, index) => (
+              <SetButton
+                key={set.id}
+                set={set}
+                index={index}
+                isSelected={selectedSetId === set.id}
+                targetMax={exercise.targetRepsMax}
+                disabled={isCurrentExerciseComplete}
+                onPress={() => {
+                  if (!isCurrentExerciseComplete) {
+                    if (Platform.OS === 'ios') {
+                      Haptics.selectionAsync();
+                    }
+                    setSelectedSetId(set.id);
+                  }
+                }}
+              />
+            ))}
+          </View>
+        </View>
+
+        {/* Rep Input */}
+        {!isCurrentExerciseComplete && selectedSetId && (
+          <View style={styles.repInputSection}>
+            <ThemedText style={styles.sectionLabel}>
+              Log Reps for Set{' '}
+              {sets.findIndex((s) => s.id === selectedSetId) + 1}
+            </ThemedText>
+
+            <View style={styles.repGrid}>
+              {REP_OPTIONS.map((rep) => (
+                <Pressable
+                  key={rep}
+                  onPress={() => handleRepSelect(rep)}
+                  style={({ pressed }) => [
+                    styles.repButton,
+                    pressed && styles.repButtonPressed,
+                    rep >= exercise.targetRepsMin &&
+                      rep <= exercise.targetRepsMax &&
+                      styles.repButtonTarget,
+                    rep >= exercise.targetRepsMax && styles.repButtonMax,
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.repButtonText,
+                      rep >= exercise.targetRepsMax && styles.repButtonTextMax,
+                    ]}
+                  >
+                    {rep}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Exercise Actions */}
+        <View style={styles.exerciseActions}>
+          {!isCurrentExerciseComplete ? (
+            <>
+              <Button
+                title="Complete Exercise"
+                onPress={handleCompleteExercise}
+                disabled={!allSetsCompleted}
+                fullWidth
+              />
+              <Button
+                title="Skip Exercise"
+                variant="ghost"
+                onPress={handleSkipExercise}
+                fullWidth
+              />
+            </>
+          ) : (
+            <View style={styles.completedBadge}>
+              <IconSymbol
+                name={status === 'skipped' ? 'forward.fill' : 'checkmark.circle.fill'}
+                size={20}
+                color={status === 'skipped' ? Colors.dark.textSecondary : '#22C55E'}
+              />
+              <ThemedText
+                style={[
+                  styles.completedText,
+                  status === 'skipped' && styles.skippedText,
+                ]}
+              >
+                {status === 'skipped' ? 'Exercise Skipped' : 'Exercise Completed'}
+              </ThemedText>
+            </View>
+          )}
+        </View>
+
+        {/* Exercise Navigation */}
+        <View style={styles.exerciseNav}>
+          {exerciseLogs.map((log, index) => (
+            <Pressable
+              key={log.id}
+              onPress={() => {
+                if (Platform.OS === 'ios') {
+                  Haptics.selectionAsync();
+                }
+                setCurrentExercise(index);
+              }}
+              style={[
+                styles.navDot,
+                index === currentExerciseIndex && styles.navDotActive,
+                (log.status === 'completed' || log.status === 'skipped') &&
+                  styles.navDotCompleted,
+              ]}
+            />
+          ))}
+        </View>
+      </ScrollView>
+
+      {/* Bottom Navigation */}
+      <SafeAreaView edges={['bottom']} style={styles.bottomNav}>
+        <View style={styles.bottomNavContent}>
+          <Pressable
+            onPress={() => {
+              if (Platform.OS === 'ios') {
+                Haptics.selectionAsync();
+              }
+              previousExercise();
+            }}
+            disabled={currentExerciseIndex === 0}
+            style={({ pressed }) => [
+              styles.navButton,
+              currentExerciseIndex === 0 && styles.navButtonDisabled,
+              pressed && styles.navButtonPressed,
+            ]}
+          >
+            <IconSymbol
+              name="chevron.left"
+              size={24}
+              color={
+                currentExerciseIndex === 0
+                  ? Colors.dark.textSecondary
+                  : Colors.dark.text
+              }
+            />
+            <ThemedText
+              style={[
+                styles.navButtonText,
+                currentExerciseIndex === 0 && styles.navButtonTextDisabled,
+              ]}
+            >
+              Previous
+            </ThemedText>
+          </Pressable>
+
+          {completedExercises === totalExercises ? (
+            <Button title="Finish Workout" onPress={handleFinishWorkout} />
+          ) : (
+            <Pressable
+              onPress={() => {
+                if (Platform.OS === 'ios') {
+                  Haptics.selectionAsync();
+                }
+                nextExercise();
+              }}
+              disabled={currentExerciseIndex === totalExercises - 1}
+              style={({ pressed }) => [
+                styles.navButton,
+                currentExerciseIndex === totalExercises - 1 &&
+                  styles.navButtonDisabled,
+                pressed && styles.navButtonPressed,
+              ]}
+            >
+              <ThemedText
+                style={[
+                  styles.navButtonText,
+                  currentExerciseIndex === totalExercises - 1 &&
+                    styles.navButtonTextDisabled,
+                ]}
+              >
+                Next
+              </ThemedText>
+              <IconSymbol
+                name="chevron.right"
+                size={24}
+                color={
+                  currentExerciseIndex === totalExercises - 1
+                    ? Colors.dark.textSecondary
+                    : Colors.dark.text
+                }
+              />
+            </Pressable>
+          )}
+        </View>
+      </SafeAreaView>
+    </SafeAreaView>
+  );
+}
+
+// Set Button Component
+function SetButton({
+  set,
+  index,
+  isSelected,
+  targetMax,
+  disabled,
+  onPress,
+}: {
+  set: SetLog;
+  index: number;
+  isSelected: boolean;
+  targetMax: number;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const isCompleted = set.completedReps !== null;
+  const hitMax = set.completedReps !== null && set.completedReps >= targetMax;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.setButton,
+        isSelected && styles.setButtonSelected,
+        isCompleted && styles.setButtonCompleted,
+        hitMax && styles.setButtonMax,
+        pressed && !disabled && styles.setButtonPressed,
+        disabled && styles.setButtonDisabled,
+      ]}
+    >
+      <ThemedText style={styles.setLabel}>Set {index + 1}</ThemedText>
+      <ThemedText
+        style={[
+          styles.setReps,
+          isCompleted && styles.setRepsCompleted,
+          hitMax && styles.setRepsMax,
+        ]}
+      >
+        {isCompleted ? set.completedReps : set.targetReps}
+      </ThemedText>
+      {hitMax && (
+        <IconSymbol name="checkmark.circle.fill" size={16} color="#22C55E" />
+      )}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.dark.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 16,
+  },
+  errorText: {
+    color: Colors.dark.error,
+    textAlign: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerProgress: {
+    fontSize: 14,
+    color: Colors.dark.textSecondary,
+  },
+  cancelText: {
+    fontSize: 14,
+    color: Colors.dark.error,
+  },
+  progressBarContainer: {
+    height: 3,
+    backgroundColor: Colors.dark.surface,
+    marginHorizontal: 16,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: Colors.dark.primary,
+    borderRadius: 2,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  exerciseHeader: {
+    marginBottom: 24,
+  },
+  exerciseName: {
+    fontSize: 28,
+    marginBottom: 12,
+  },
+  exerciseMeta: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 15,
+    color: Colors.dark.textSecondary,
+  },
+  progressionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#22C55E20',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  progressionText: {
+    fontSize: 14,
+    color: '#22C55E',
+    fontWeight: '500',
+  },
+  setsSection: {
+    marginBottom: 24,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.dark.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  setsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  setButton: {
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
+    padding: 16,
+    minWidth: 90,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  setButtonSelected: {
+    borderColor: Colors.dark.primary,
+  },
+  setButtonCompleted: {
+    backgroundColor: Colors.dark.surface,
+  },
+  setButtonMax: {
+    backgroundColor: '#22C55E20',
+    borderColor: '#22C55E40',
+  },
+  setButtonPressed: {
+    opacity: 0.8,
+  },
+  setButtonDisabled: {
+    opacity: 0.6,
+  },
+  setLabel: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+    marginBottom: 4,
+  },
+  setReps: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  setRepsCompleted: {
+    color: Colors.dark.primary,
+  },
+  setRepsMax: {
+    color: '#22C55E',
+  },
+  repInputSection: {
+    marginBottom: 24,
+  },
+  repGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  repButton: {
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  repButtonPressed: {
+    opacity: 0.7,
+  },
+  repButtonTarget: {
+    backgroundColor: Colors.dark.primary + '30',
+  },
+  repButtonMax: {
+    backgroundColor: '#22C55E30',
+  },
+  repButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  repButtonTextMax: {
+    color: '#22C55E',
+  },
+  exerciseActions: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.dark.surface,
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  completedText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#22C55E',
+  },
+  skippedText: {
+    color: Colors.dark.textSecondary,
+  },
+  exerciseNav: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+  },
+  navDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.dark.surface,
+  },
+  navDotActive: {
+    backgroundColor: Colors.dark.primary,
+    width: 24,
+  },
+  navDotCompleted: {
+    backgroundColor: '#22C55E',
+  },
+  bottomNav: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.dark.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+  },
+  bottomNavContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  navButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  navButtonDisabled: {
+    opacity: 0.5,
+  },
+  navButtonPressed: {
+    opacity: 0.7,
+  },
+  navButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.dark.text,
+  },
+  navButtonTextDisabled: {
+    color: Colors.dark.textSecondary,
+  },
+});
