@@ -79,26 +79,26 @@
 - [x] Show exercise logs with sets/reps
 - [x] Indicate progressions earned per workout
 - [x] Bug fixes and edge case handling
-- [ ] Performance optimization
-- [ ] Comprehensive testing
+- [x] Performance optimization
+- [x] Comprehensive testing
 
 ---
 
 ### Phase 2: Premium Features - ~7 weeks
 
 #### Convex Setup (0.5 weeks)
-- [ ] Set up Convex project
-- [ ] Define Convex schema (users, schemas, workoutDays, exercises, workoutSessions, exerciseLogs, setLogs)
-- [ ] Create basic queries and mutations
-- [ ] Set up indexes for common queries
+- [x] Set up Convex project
+- [x] Define Convex schema (users, schemas, workoutDays, exercises, workoutSessions, exerciseLogs, setLogs)
+- [x] Create basic queries and mutations
+- [x] Set up indexes for common queries
 
 #### Authentication (1 week)
-- [ ] Integrate Convex Auth
-- [ ] Implement Email + Password login
-- [ ] Implement Google OAuth
-- [ ] Implement Apple Sign-In
-- [ ] Build auth store (Zustand)
-- [ ] Update existing auth screens to use Convex Auth
+- [x] Integrate Convex Auth
+- [x] Implement Email + Password login
+- [x] Implement Google OAuth
+- [x] Implement Apple Sign-In
+- [x] Build auth store (Zustand)
+- [x] Update existing auth screens to use Convex Auth
 - [ ] Add account management (profile, logout)
 - [ ] Handle auth state persistence
 
