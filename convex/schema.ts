@@ -62,7 +62,9 @@ export default defineSchema({
     .index("by_user_status", ["userId", "status"])
     .index("by_user_completed", ["userId", "completedAt"])
     .index("by_day", ["dayId"])
-    .index("by_day_status", ["dayId", "status"]),
+    .index("by_day_status", ["dayId", "status"])
+    .index("by_schema", ["schemaId"])
+    .index("by_day_completed", ["dayId", "completedAt"]),
 
   // Exercise Log - log of an exercise within a session
   exerciseLogs: defineTable({
@@ -78,7 +80,8 @@ export default defineSchema({
     progressionEarned: v.boolean(),
   })
     .index("by_session", ["sessionId"])
-    .index("by_exercise", ["exerciseId"]),
+    .index("by_exercise", ["exerciseId"])
+    .index("by_session_status", ["sessionId", "status"]),
 
   // Set Log - log of a single set within an exercise
   setLogs: defineTable({
