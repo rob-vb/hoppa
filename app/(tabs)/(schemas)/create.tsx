@@ -198,6 +198,54 @@ export default function CreateSchemaScreen() {
     });
   };
 
+  const handleMoveExerciseUp = (dayId: string, exerciseId: string) => {
+    const day = days.find((d) => d.id === dayId);
+    if (!day) return;
+
+    const index = day.exercises.findIndex((e) => e.id === exerciseId);
+    if (index <= 0) return;
+
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+
+    setDays(
+      days.map((d) => {
+        if (d.id !== dayId) return d;
+        const newExercises = [...d.exercises];
+        [newExercises[index - 1], newExercises[index]] = [
+          newExercises[index],
+          newExercises[index - 1],
+        ];
+        return { ...d, exercises: newExercises };
+      })
+    );
+  };
+
+  const handleMoveExerciseDown = (dayId: string, exerciseId: string) => {
+    const day = days.find((d) => d.id === dayId);
+    if (!day) return;
+
+    const index = day.exercises.findIndex((e) => e.id === exerciseId);
+    if (index < 0 || index >= day.exercises.length - 1) return;
+
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+
+    setDays(
+      days.map((d) => {
+        if (d.id !== dayId) return d;
+        const newExercises = [...d.exercises];
+        [newExercises[index], newExercises[index + 1]] = [
+          newExercises[index + 1],
+          newExercises[index],
+        ];
+        return { ...d, exercises: newExercises };
+      })
+    );
+  };
+
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
 
@@ -290,9 +338,46 @@ export default function CreateSchemaScreen() {
     }
   };
 
-  const renderExercise = (dayId: string, exercise: LocalExercise, index: number) => (
+  const renderExercise = (
+    dayId: string,
+    exercise: LocalExercise,
+    index: number,
+    totalExercises: number
+  ) => (
     <View key={exercise.id} style={styles.exerciseContainer}>
       <View style={styles.exerciseHeader}>
+        <View style={styles.exerciseReorderButtons}>
+          <Pressable
+            onPress={() => handleMoveExerciseUp(dayId, exercise.id)}
+            hitSlop={8}
+            style={[
+              styles.exerciseReorderButton,
+              index === 0 && styles.reorderButtonDisabled,
+            ]}
+            disabled={index === 0}
+          >
+            <IconSymbol
+              name="chevron.up"
+              size={14}
+              color={index === 0 ? Colors.dark.border : Colors.dark.icon}
+            />
+          </Pressable>
+          <Pressable
+            onPress={() => handleMoveExerciseDown(dayId, exercise.id)}
+            hitSlop={8}
+            style={[
+              styles.exerciseReorderButton,
+              index === totalExercises - 1 && styles.reorderButtonDisabled,
+            ]}
+            disabled={index === totalExercises - 1}
+          >
+            <IconSymbol
+              name="chevron.down"
+              size={14}
+              color={index === totalExercises - 1 ? Colors.dark.border : Colors.dark.icon}
+            />
+          </Pressable>
+        </View>
         <ThemedText type="defaultSemiBold" style={styles.exerciseNumber}>
           Exercise {index + 1}
         </ThemedText>
@@ -509,7 +594,7 @@ export default function CreateSchemaScreen() {
           )}
 
           {day.exercises.map((exercise, exerciseIndex) =>
-            renderExercise(day.id, exercise, exerciseIndex)
+            renderExercise(day.id, exercise, exerciseIndex, day.exercises.length)
           )}
 
           <Button
@@ -731,10 +816,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
+    gap: 8,
+  },
+  exerciseReorderButtons: {
+    flexDirection: 'column',
+    gap: 0,
+  },
+  exerciseReorderButton: {
+    padding: 2,
   },
   exerciseNumber: {
     fontSize: 14,
     color: Colors.dark.textSecondary,
+    flex: 1,
   },
   fieldLabel: {
     fontSize: 14,
