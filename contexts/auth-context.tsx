@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useQuery } from "convex/react";
+import { useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuthStore, type User } from '@/stores/auth-store';
 
@@ -25,19 +25,41 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
-  const convexUser = useQuery(api.users.currentUser);
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexLoading } = useConvexAuth();
 
-  const { user, isLoading, isAuthenticated, error, setUser, setError, clearError, reset } =
+  // Only fetch user data when authenticated (skip query when not authenticated)
+  const convexUser = useQuery(
+    api.users.currentUser,
+    isConvexAuthenticated ? undefined : "skip"
+  );
+
+  const { user, isLoading, isAuthenticated, error, setUser, setLoading, setError, clearError, reset } =
     useAuthStore();
 
   // Sync Convex auth state with Zustand store
   useEffect(() => {
-    if (convexUser === undefined) {
-      // Still loading
+    // If Convex is still checking stored credentials, stay in loading state
+    if (isConvexLoading) {
+      setLoading(true);
       return;
     }
+
+    // If not authenticated, clear user and exit loading
+    if (!isConvexAuthenticated) {
+      setUser(null);
+      return;
+    }
+
+    // Authenticated - wait for user data to load
+    if (convexUser === undefined) {
+      // User query still loading, but we're authenticated
+      setLoading(true);
+      return;
+    }
+
+    // User data loaded
     setUser(convexUser);
-  }, [convexUser, setUser]);
+  }, [isConvexLoading, isConvexAuthenticated, convexUser, setUser, setLoading]);
 
   const signIn = async (email: string, password: string) => {
     try {
