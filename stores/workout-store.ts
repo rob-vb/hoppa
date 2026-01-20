@@ -8,6 +8,7 @@ import {
   WorkoutDayWithExercises,
 } from '@/db/types';
 import * as db from '@/db/database';
+import { isProgressionEnabled } from '@/utils/progression-engine';
 
 interface ActiveExerciseLog extends ExerciseLogWithSets {
   exercise: Exercise;
@@ -355,14 +356,18 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
 
   // Progression logic
   checkAndApplyProgression: async (exerciseLogId: string) => {
-    const { exerciseLogs } = get();
+    const { session, exerciseLogs } = get();
     const log = exerciseLogs.find((l) => l.id === exerciseLogId);
-    if (!log) return false;
+    if (!log || !session) return false;
 
     const { exercise, sets } = log;
 
-    // Progressive loading must be enabled
-    if (!exercise.progressiveLoadingEnabled) return false;
+    // Get schema to check schema-level progressive loading toggle
+    const schema = await db.getSchemaById(session.schemaId);
+    if (!schema) return false;
+
+    // Check both schema-level and exercise-level progressive loading toggles
+    if (!isProgressionEnabled(schema, exercise)) return false;
 
     // All sets must be completed
     const completedSets = sets.filter((s) => s.completedReps !== null);
