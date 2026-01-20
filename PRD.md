@@ -61,16 +61,16 @@
 - [x] Show workout progress bar (exercise X of Y)
 - [x] Add workout timer display
 - [x] Implement End Workout flow
-- [ ] Add haptic feedback for interactions (iOS)
+- [x] Add haptic feedback for interactions (iOS)
 
 #### Progression Engine (1 week)
-- [ ] Build progression engine utility (`utils/progression-engine.ts`)
-- [ ] Check schema-level progressive loading toggle
-- [ ] Check exercise-level progressive loading toggle
-- [ ] Implement progression rule: all sets must hit max target reps
-- [ ] Calculate and display "progression earned" feedback
-- [ ] Auto-update exercise currentWeight on progression
-- [ ] Show next session's weight after progression
+- [x] Build progression engine utility (`utils/progression-engine.ts`)
+- [x] Check schema-level progressive loading toggle
+- [x] Check exercise-level progressive loading toggle
+- [x] Implement progression rule: all sets must hit max target reps
+- [x] Calculate and display "progression earned" feedback
+- [x] Auto-update exercise currentWeight on progression
+- [x] Show next session's weight after progression
 
 #### History & Polish (1 week)
 - [ ] Build history tab `(history)/index.tsx`
