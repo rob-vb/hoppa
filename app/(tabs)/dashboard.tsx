@@ -10,12 +10,14 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Card } from '@/components/ui/card';
 import { OverviewCard } from '@/components/ui/overview-card';
 import { ExerciseProgressChart } from '@/components/ui/exercise-progress-chart';
+import { WeightComparisonCard } from '@/components/ui/weight-comparison-card';
 import { Colors } from '@/constants/theme';
 import * as db from '@/db/database';
 
@@ -328,42 +330,19 @@ export default function DashboardScreen() {
                 )}
               </View>
 
-              {/* Progress Summary */}
-              <View style={styles.progressSummary}>
-                <View style={styles.progressItem}>
-                  <ThemedText style={styles.progressLabel}>Starting</ThemedText>
-                  <ThemedText style={styles.progressValue}>
-                    {selectedExercise.startingWeight}kg
-                  </ThemedText>
-                </View>
-                <View style={styles.progressItem}>
-                  <ThemedText style={styles.progressLabel}>Current</ThemedText>
-                  <ThemedText style={styles.progressValue}>
-                    {selectedExercise.currentWeight}kg
-                  </ThemedText>
-                </View>
-                <View style={styles.progressItem}>
-                  <ThemedText style={styles.progressLabel}>Gain</ThemedText>
-                  <ThemedText
-                    style={[
-                      styles.progressValue,
-                      selectedExercise.currentWeight > selectedExercise.startingWeight &&
-                        styles.progressValueSuccess,
-                    ]}
-                  >
-                    {selectedExercise.currentWeight >= selectedExercise.startingWeight
-                      ? '+'
-                      : ''}
-                    {(selectedExercise.currentWeight - selectedExercise.startingWeight).toFixed(1)}
-                    kg
-                  </ThemedText>
-                </View>
-                <View style={styles.progressItem}>
-                  <ThemedText style={styles.progressLabel}>Progressions</ThemedText>
-                  <ThemedText style={styles.progressValue}>
-                    {selectedExercise.progressionCount}
-                  </ThemedText>
-                </View>
+              {/* Weight Comparison */}
+              <WeightComparisonCard
+                startingWeight={selectedExercise.startingWeight}
+                currentWeight={selectedExercise.currentWeight}
+              />
+
+              {/* Progressions Count */}
+              <View style={styles.progressionsRow}>
+                <MaterialIcons name="emoji-events" size={18} color={Colors.dark.primary} />
+                <ThemedText style={styles.progressionsText}>
+                  {selectedExercise.progressionCount} progression
+                  {selectedExercise.progressionCount !== 1 ? 's' : ''} earned
+                </ThemedText>
               </View>
             </>
           ) : (
@@ -665,29 +644,19 @@ const styles = StyleSheet.create({
     color: Colors.dark.textSecondary,
     textAlign: 'center',
   },
-  progressSummary: {
+  progressionsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
   },
-  progressItem: {
-    width: '48%',
-    backgroundColor: Colors.dark.background,
-    borderRadius: 8,
-    padding: 12,
-  },
-  progressLabel: {
-    fontSize: 12,
+  progressionsText: {
+    fontSize: 14,
     color: Colors.dark.textSecondary,
-    marginBottom: 4,
-  },
-  progressValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.dark.text,
-  },
-  progressValueSuccess: {
-    color: '#10B981',
   },
   calendarCard: {
     padding: 16,
