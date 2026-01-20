@@ -8,9 +8,216 @@
 ---
 
 ## Tasks
-- [ ] Create auth
-- [ ] Add dashboard
-- [x] Done task (skipped)
+
+### Phase 1: MVP (Free Tier) - ~7.5 weeks
+
+#### Setup & Foundation (1 week)
+- [x] Set up project structure with proper path aliases (`@/`)
+- [x] Configure NativeTabs navigation (Home, Schemas, History)
+- [x] Create tab group layouts with Stack navigators
+- [x] Set up dark theme (background: #1C1C1E, surface: #2C2C2E)
+- [x] Create base UI components (buttons, inputs, cards)
+- [x] Set up SQLite database with expo-sqlite
+- [x] Create database schema (schemas, workout_days, exercises, workout_sessions, exercise_logs, set_logs)
+
+#### Schema Management (1.5 weeks)
+- [ ] Create Zustand schema store with SQLite sync
+- [ ] Build schema list screen `(schemas)/index.tsx`
+- [ ] Build schema creation screen `(schemas)/create.tsx`
+- [ ] Implement workout day management (add, edit, reorder, delete)
+- [ ] Implement exercise management within days
+- [ ] Add equipment type selector (plates/machine/other)
+- [ ] Add base weight input
+- [ ] Add target sets and rep range inputs
+- [ ] Add progressive loading toggles (schema-level and exercise-level)
+- [ ] Add progression increment selector (2.5kg/5kg/custom)
+- [ ] Build schema details/edit screen `(schemas)/[schemaId].tsx`
+- [ ] Build schema card component for list view
+
+#### AI Schema Import (1 week)
+- [ ] Set up Claude API integration
+- [ ] Build image picker flow (camera/gallery)
+- [ ] Create AI prompt for schema extraction
+- [ ] Parse AI response into schema structure
+- [ ] Build review/edit screen for extracted schema
+- [ ] Add rate limiting (3 imports/month for free tier)
+- [ ] Handle error states (unclear image, partial extraction, API errors)
+
+#### Workout Execution (2 weeks)
+- [ ] Create Zustand workout store
+- [ ] Build home screen with workout day cards `(home)/index.tsx`
+- [ ] Show "last workout" date on day cards
+- [ ] Build active workout screen `workout/[dayId].tsx` (fullscreen modal)
+- [ ] Create exercise card component with current exercise display
+- [ ] Build plate calculator utility (`utils/plate-calculator.ts`)
+- [ ] Create plate visualizer component (visual barbell breakdown)
+- [ ] Distinguish gym plates vs personal microplates in visualization
+- [ ] Build rep input component with large touch targets
+- [ ] Implement quick rep buttons
+- [ ] Add auto-advance to next set after input
+- [ ] Show visual feedback (checkmark) when rep meets target
+- [ ] Implement Skip exercise functionality
+- [ ] Implement Finish exercise functionality
+- [ ] Show workout progress bar (exercise X of Y)
+- [ ] Add workout timer display
+- [ ] Implement End Workout flow
+- [ ] Add haptic feedback for interactions (iOS)
+
+#### Progression Engine (1 week)
+- [ ] Build progression engine utility (`utils/progression-engine.ts`)
+- [ ] Check schema-level progressive loading toggle
+- [ ] Check exercise-level progressive loading toggle
+- [ ] Implement progression rule: all sets must hit max target reps
+- [ ] Calculate and display "progression earned" feedback
+- [ ] Auto-update exercise currentWeight on progression
+- [ ] Show next session's weight after progression
+
+#### History & Polish (1 week)
+- [ ] Build history tab `(history)/index.tsx`
+- [ ] Show last 30 days of workouts
+- [ ] Display workout summary (date, schema, day, duration)
+- [ ] Show exercise logs with sets/reps
+- [ ] Indicate progressions earned per workout
+- [ ] Bug fixes and edge case handling
+- [ ] Performance optimization
+- [ ] Comprehensive testing
+
+---
+
+### Phase 2: Premium Features - ~7 weeks
+
+#### Convex Setup (0.5 weeks)
+- [ ] Set up Convex project
+- [ ] Define Convex schema (users, schemas, workoutDays, exercises, workoutSessions, exerciseLogs, setLogs)
+- [ ] Create basic queries and mutations
+- [ ] Set up indexes for common queries
+
+#### Authentication (1 week)
+- [ ] Integrate Convex Auth
+- [ ] Implement Email + Password login
+- [ ] Implement Google OAuth
+- [ ] Implement Apple Sign-In
+- [ ] Build auth store (Zustand)
+- [ ] Update existing auth screens to use Convex Auth
+- [ ] Add account management (profile, logout)
+- [ ] Handle auth state persistence
+
+#### Sync Engine (1.5 weeks)
+- [ ] Build sync engine utility (`utils/sync-engine.ts`)
+- [ ] Implement initial sync (upload local SQLite to Convex)
+- [ ] Implement real-time sync via Convex subscriptions
+- [ ] Handle conflict resolution (last-write-wins with timestamps)
+- [ ] Implement offline queue for mutations
+- [ ] Sync when coming back online
+- [ ] Add localId fields for SQLite ↔ Convex mapping
+
+#### Progress Dashboard (2 weeks)
+- [ ] Build dashboard tab `(tabs)/dashboard.tsx` (replace placeholder)
+- [ ] Create overview cards (workouts, progressions, volume)
+- [ ] Build exercise selector with search
+- [ ] Create exercise progress chart (weight over time)
+- [ ] Show starting weight → current weight comparison
+- [ ] Display progression count and average time between
+- [ ] Build workout calendar view
+- [ ] Implement Convex queries for progress data
+- [ ] Add date range filters (last month, 3 months, 6 months, year)
+
+#### Subscription (1 week)
+- [ ] Integrate RevenueCat SDK
+- [ ] Build paywall UI
+- [ ] Implement monthly subscription (€4.99)
+- [ ] Implement annual subscription (€39.99)
+- [ ] Handle purchase flow (App Store / Google Play)
+- [ ] Update isPremium flag in Convex on purchase
+- [ ] Gate premium features behind subscription check
+- [ ] Handle subscription expiration/renewal
+
+#### Testing & Polish (1 week)
+- [ ] Test offline scenarios
+- [ ] Test sync edge cases
+- [ ] Test subscription flows
+- [ ] Performance optimization
+- [ ] Bug fixes
+
+---
+
+### Phase 3: Personal Trainer Platform - ~12 weeks
+
+#### Web App Setup (1 week)
+- [ ] Create Next.js 14 project (App Router)
+- [ ] Set up Tailwind CSS
+- [ ] Configure Convex for web
+- [ ] Implement trainer authentication
+- [ ] Build basic layout (sidebar, header)
+- [ ] Create landing page
+
+#### Trainer Onboarding (1 week)
+- [ ] Build trainer registration flow
+- [ ] Create trainers table in Convex
+- [ ] Integrate Stripe for subscriptions
+- [ ] Implement tier selection (Starter/Pro/Studio)
+- [ ] Build subscription management UI
+- [ ] Handle upgrade/downgrade flows
+
+#### Client Management (1.5 weeks)
+- [ ] Build client invitation system (email)
+- [ ] Create trainerClients table in Convex
+- [ ] Generate invite tokens
+- [ ] Build invite acceptance flow in mobile app
+- [ ] Create client list view with status indicators
+- [ ] Implement client states (invited, active, paused, archived)
+- [ ] Build client card component
+- [ ] Add client search and filtering
+
+#### Schema Builder - Web (2 weeks)
+- [ ] Build drag-and-drop schema builder
+- [ ] Create exercise library with search
+- [ ] Implement day management (add, reorder, delete)
+- [ ] Implement exercise management within days
+- [ ] Add all exercise fields (equipment, weight, sets, reps, progression)
+- [ ] Add exercise notes field (form cues)
+- [ ] Build template save/load functionality
+- [ ] Create schemaTemplates table in Convex
+- [ ] Implement multi-client assignment
+- [ ] Create schemaAssignments table in Convex
+
+#### Client Sync (1 week)
+- [ ] Set up Expo Push Notifications
+- [ ] Send push notification on schema assignment
+- [ ] Build "new schema received" screen in mobile app
+- [ ] Sync assigned schemas to client's local database
+- [ ] Show trainer branding in client app
+- [ ] Display "Assigned by [Trainer]" on schemas
+
+#### Progress Dashboard - Trainer View (2 weeks)
+- [ ] Build client detail view
+- [ ] Create overview cards (workouts, volume, progressions, adherence)
+- [ ] Build multi-exercise progress chart
+- [ ] Create recent activity feed
+- [ ] Show workout details (exercises, sets, reps, skipped)
+- [ ] Highlight progressions earned
+- [ ] Add workout calendar for client
+- [ ] Build adherence tracking (sessions completed vs expected)
+
+#### Payment Collection (2 weeks)
+- [ ] Integrate Stripe Connect
+- [ ] Build Stripe onboarding flow for trainers
+- [ ] Create clientPayments table in Convex
+- [ ] Implement billing configuration per client
+- [ ] Support billing types (monthly, per-session, package)
+- [ ] Build invoicing system
+- [ ] Create payment reminders
+- [ ] Build billing dashboard for trainers
+- [ ] Calculate and display platform fees
+- [ ] Handle payouts to trainer accounts
+
+#### Testing & Polish (1.5 weeks)
+- [ ] End-to-end testing (web + mobile)
+- [ ] Test payment flows
+- [ ] Test schema delivery
+- [ ] Mobile responsiveness for web dashboard
+- [ ] Documentation
+- [ ] Bug fixes
 
 ---
 
