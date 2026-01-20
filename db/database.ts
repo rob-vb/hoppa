@@ -111,6 +111,15 @@ async function initializeTables(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_sessions_day ON workout_sessions(day_id);
     CREATE INDEX IF NOT EXISTS idx_exercise_logs_session ON exercise_logs(session_id);
     CREATE INDEX IF NOT EXISTS idx_set_logs_exercise_log ON set_logs(exercise_log_id);
+
+    -- Performance indexes for filtered/sorted queries
+    CREATE INDEX IF NOT EXISTS idx_sessions_status ON workout_sessions(status);
+    CREATE INDEX IF NOT EXISTS idx_sessions_completed_at ON workout_sessions(completed_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_status_completed ON workout_sessions(status, completed_at);
+    CREATE INDEX IF NOT EXISTS idx_exercise_logs_exercise ON exercise_logs(exercise_id);
+
+    -- Composite index for getLastWorkoutForDay queries (day_id + status + completed_at)
+    CREATE INDEX IF NOT EXISTS idx_sessions_day_status_completed ON workout_sessions(day_id, status, completed_at DESC);
   `);
 }
 
@@ -859,6 +868,292 @@ export async function getCompletedSessionsInDateRange(
     completedAt: row.completed_at,
     status: row.status,
   }));
+}
+
+// ============================================
+// Batch Operations (Performance Optimized)
+// ============================================
+
+/**
+ * Batch fetch last workout sessions for multiple day IDs
+ * Optimized to avoid N+1 queries when loading home screen
+ */
+export async function getLastWorkoutsForDays(
+  dayIds: string[]
+): Promise<Map<string, WorkoutSession>> {
+  if (dayIds.length === 0) return new Map();
+
+  const database = await getDatabase();
+  const placeholders = dayIds.map(() => '?').join(',');
+
+  // Use a subquery to get the most recent completed session for each day
+  const rows = await database.getAllAsync<{
+    id: string;
+    schema_id: string;
+    day_id: string;
+    started_at: number;
+    completed_at: number | null;
+    status: WorkoutStatus;
+  }>(
+    `SELECT ws.*
+     FROM workout_sessions ws
+     INNER JOIN (
+       SELECT day_id, MAX(completed_at) as max_completed
+       FROM workout_sessions
+       WHERE day_id IN (${placeholders}) AND status = 'completed'
+       GROUP BY day_id
+     ) latest ON ws.day_id = latest.day_id AND ws.completed_at = latest.max_completed
+     WHERE ws.status = 'completed'`,
+    dayIds
+  );
+
+  const result = new Map<string, WorkoutSession>();
+  for (const row of rows) {
+    result.set(row.day_id, {
+      id: row.id,
+      schemaId: row.schema_id,
+      dayId: row.day_id,
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+      status: row.status,
+    });
+  }
+  return result;
+}
+
+/**
+ * Batch fetch schemas by IDs
+ * Returns a Map for O(1) lookups
+ */
+export async function getSchemasByIds(
+  schemaIds: string[]
+): Promise<Map<string, Schema>> {
+  if (schemaIds.length === 0) return new Map();
+
+  const database = await getDatabase();
+  const uniqueIds = [...new Set(schemaIds)];
+  const placeholders = uniqueIds.map(() => '?').join(',');
+
+  const rows = await database.getAllAsync<{
+    id: string;
+    name: string;
+    progressive_loading_enabled: number;
+    created_at: number;
+    updated_at: number;
+  }>(`SELECT * FROM schemas WHERE id IN (${placeholders})`, uniqueIds);
+
+  const result = new Map<string, Schema>();
+  for (const row of rows) {
+    result.set(row.id, {
+      id: row.id,
+      name: row.name,
+      progressiveLoadingEnabled: row.progressive_loading_enabled === 1,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    });
+  }
+  return result;
+}
+
+/**
+ * Batch fetch workout days by IDs
+ * Returns a Map for O(1) lookups
+ */
+export async function getWorkoutDaysByIds(
+  dayIds: string[]
+): Promise<Map<string, WorkoutDay>> {
+  if (dayIds.length === 0) return new Map();
+
+  const database = await getDatabase();
+  const uniqueIds = [...new Set(dayIds)];
+  const placeholders = uniqueIds.map(() => '?').join(',');
+
+  const rows = await database.getAllAsync<{
+    id: string;
+    schema_id: string;
+    name: string;
+    order_index: number;
+  }>(`SELECT * FROM workout_days WHERE id IN (${placeholders})`, uniqueIds);
+
+  const result = new Map<string, WorkoutDay>();
+  for (const row of rows) {
+    result.set(row.id, {
+      id: row.id,
+      schemaId: row.schema_id,
+      name: row.name,
+      orderIndex: row.order_index,
+    });
+  }
+  return result;
+}
+
+/**
+ * Get completed sessions with all details in optimized batch queries
+ * Replaces the N+1 pattern in history screen
+ */
+export async function getCompletedSessionsWithDetails(
+  startDate: number,
+  endDate: number
+): Promise<
+  Array<{
+    session: WorkoutSession;
+    schemaName: string;
+    dayName: string;
+    exerciseCount: number;
+    completedCount: number;
+    totalReps: number;
+    progressionCount: number;
+  }>
+> {
+  const database = await getDatabase();
+
+  // Single query to get sessions with schema/day names and aggregated stats
+  const rows = await database.getAllAsync<{
+    session_id: string;
+    schema_id: string;
+    day_id: string;
+    started_at: number;
+    completed_at: number | null;
+    status: WorkoutStatus;
+    schema_name: string;
+    day_name: string;
+  }>(
+    `SELECT
+       ws.id as session_id,
+       ws.schema_id,
+       ws.day_id,
+       ws.started_at,
+       ws.completed_at,
+       ws.status,
+       s.name as schema_name,
+       wd.name as day_name
+     FROM workout_sessions ws
+     JOIN schemas s ON ws.schema_id = s.id
+     JOIN workout_days wd ON ws.day_id = wd.id
+     WHERE ws.status = 'completed' AND ws.completed_at >= ? AND ws.completed_at <= ?
+     ORDER BY ws.completed_at DESC`,
+    [startDate, endDate]
+  );
+
+  if (rows.length === 0) return [];
+
+  const sessionIds = rows.map((r) => r.session_id);
+  const placeholders = sessionIds.map(() => '?').join(',');
+
+  // Get exercise log stats in one query
+  const exerciseStats = await database.getAllAsync<{
+    session_id: string;
+    exercise_count: number;
+    completed_count: number;
+    progression_count: number;
+  }>(
+    `SELECT
+       session_id,
+       COUNT(*) as exercise_count,
+       SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_count,
+       SUM(CASE WHEN progression_earned = 1 THEN 1 ELSE 0 END) as progression_count
+     FROM exercise_logs
+     WHERE session_id IN (${placeholders})
+     GROUP BY session_id`,
+    sessionIds
+  );
+
+  // Get total reps in one query
+  const repStats = await database.getAllAsync<{
+    session_id: string;
+    total_reps: number;
+  }>(
+    `SELECT
+       el.session_id,
+       COALESCE(SUM(sl.completed_reps), 0) as total_reps
+     FROM exercise_logs el
+     LEFT JOIN set_logs sl ON el.id = sl.exercise_log_id
+     WHERE el.session_id IN (${placeholders})
+     GROUP BY el.session_id`,
+    sessionIds
+  );
+
+  // Build lookup maps
+  const exerciseStatsMap = new Map(exerciseStats.map((s) => [s.session_id, s]));
+  const repStatsMap = new Map(repStats.map((s) => [s.session_id, s]));
+
+  return rows.map((row) => {
+    const stats = exerciseStatsMap.get(row.session_id);
+    const reps = repStatsMap.get(row.session_id);
+
+    return {
+      session: {
+        id: row.session_id,
+        schemaId: row.schema_id,
+        dayId: row.day_id,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+        status: row.status,
+      },
+      schemaName: row.schema_name,
+      dayName: row.day_name,
+      exerciseCount: stats?.exercise_count ?? 0,
+      completedCount: stats?.completed_count ?? 0,
+      totalReps: reps?.total_reps ?? 0,
+      progressionCount: stats?.progression_count ?? 0,
+    };
+  });
+}
+
+/**
+ * Get all schemas with their days and last workout info
+ * Optimized for home screen loading
+ */
+export async function getSchemasWithDaysAndLastWorkout(): Promise<
+  Array<{
+    schema: SchemaWithDays;
+    lastWorkouts: Map<string, WorkoutSession>;
+  }>
+> {
+  const schemas = await getSchemas();
+  if (schemas.length === 0) return [];
+
+  const result: Array<{
+    schema: SchemaWithDays;
+    lastWorkouts: Map<string, WorkoutSession>;
+  }> = [];
+
+  // Get all days for all schemas in parallel
+  const schemasWithDays = await Promise.all(
+    schemas.map((s) => getSchemaWithDays(s.id))
+  );
+
+  // Collect all day IDs
+  const allDayIds: string[] = [];
+  for (const schema of schemasWithDays) {
+    if (schema) {
+      for (const day of schema.days) {
+        allDayIds.push(day.id);
+      }
+    }
+  }
+
+  // Batch fetch last workouts for all days
+  const lastWorkoutsMap = await getLastWorkoutsForDays(allDayIds);
+
+  // Build result
+  for (const schema of schemasWithDays) {
+    if (schema) {
+      const schemaLastWorkouts = new Map<string, WorkoutSession>();
+      for (const day of schema.days) {
+        const lastWorkout = lastWorkoutsMap.get(day.id);
+        if (lastWorkout) {
+          schemaLastWorkouts.set(day.id, lastWorkout);
+        }
+      }
+      result.push({
+        schema,
+        lastWorkouts: schemaLastWorkouts,
+      });
+    }
+  }
+
+  return result;
 }
 
 // Close database connection (for cleanup)

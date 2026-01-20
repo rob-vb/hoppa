@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/ui/card';
@@ -5,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { WorkoutSession } from '@/db/types';
+import { formatRelativeDate, formatTimeOfDay, formatDuration } from '@/utils/format';
 
 export type HistorySessionCardProps = {
   session: WorkoutSession;
@@ -17,55 +19,7 @@ export type HistorySessionCardProps = {
   onPress?: () => void;
 };
 
-function formatDate(timestamp: number): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now.getTime() - timestamp;
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-  if (days === 0) {
-    return 'Today';
-  }
-  if (days === 1) {
-    return 'Yesterday';
-  }
-  if (days < 7) {
-    return date.toLocaleDateString(undefined, { weekday: 'long' });
-  }
-
-  return date.toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function formatDuration(startedAt: number, completedAt: number): string {
-  const durationMs = completedAt - startedAt;
-  const minutes = Math.floor(durationMs / (1000 * 60));
-
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  if (remainingMinutes === 0) {
-    return `${hours}h`;
-  }
-
-  return `${hours}h ${remainingMinutes}m`;
-}
-
-export function HistorySessionCard({
+export const HistorySessionCard = memo(function HistorySessionCard({
   session,
   dayName,
   schemaName,
@@ -76,17 +30,24 @@ export function HistorySessionCard({
   onPress,
 }: HistorySessionCardProps) {
   const completedAt = session.completedAt ?? session.startedAt;
-  const duration = formatDuration(session.startedAt, completedAt);
   const allCompleted = completedCount === exerciseCount;
+
+  // Memoize formatted values to prevent recalculation on re-renders
+  const formattedDate = useMemo(() => formatRelativeDate(completedAt), [completedAt]);
+  const formattedTime = useMemo(() => formatTimeOfDay(completedAt), [completedAt]);
+  const duration = useMemo(
+    () => formatDuration(completedAt - session.startedAt),
+    [completedAt, session.startedAt]
+  );
 
   return (
     <Card onPress={onPress} style={styles.card}>
       <View style={styles.header}>
         <View style={styles.dateRow}>
           <ThemedText type="defaultSemiBold" style={styles.date}>
-            {formatDate(completedAt)}
+            {formattedDate}
           </ThemedText>
-          <ThemedText style={styles.time}>{formatTime(completedAt)}</ThemedText>
+          <ThemedText style={styles.time}>{formattedTime}</ThemedText>
         </View>
         <View style={styles.titleRow}>
           <ThemedText type="defaultSemiBold" style={styles.dayName}>
@@ -150,7 +111,7 @@ export function HistorySessionCard({
       </View>
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

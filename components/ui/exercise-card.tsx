@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/ui/card';
@@ -15,7 +16,7 @@ export type ExerciseCardProps = {
   completedSetsCount: number;
 };
 
-export function ExerciseCard({
+export const ExerciseCard = memo(function ExerciseCard({
   exercise,
   sets,
   totalWeight,
@@ -108,7 +109,7 @@ export function ExerciseCard({
       )}
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

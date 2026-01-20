@@ -10,9 +10,12 @@ import {
 import * as db from '@/db/database';
 import { isProgressionEnabled } from '@/utils/progression-engine';
 
-interface ActiveExerciseLog extends ExerciseLogWithSets {
+export interface ExerciseLogWithDetails extends ExerciseLogWithSets {
   exercise: Exercise;
 }
+
+// Alias for internal use
+type ActiveExerciseLog = ExerciseLogWithDetails;
 
 interface WorkoutState {
   // Active session

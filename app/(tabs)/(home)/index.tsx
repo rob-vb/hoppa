@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, View, ListRenderItem } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -32,22 +32,18 @@ export default function HomeScreen() {
     setIsLoading(true);
     setError(null);
     try {
-      // Load all schemas with their days
+      // Load all schemas with their days and last workouts using batch query
       await loadSchemas();
-      const allSchemas = useSchemaStore.getState().schemas;
+      const schemasWithLastWorkouts = await db.getSchemasWithDaysAndLastWorkout();
 
       const days: WorkoutDayWithSchema[] = [];
 
-      for (const schema of allSchemas) {
-        const schemaWithDays = await db.getSchemaWithDays(schema.id);
-        if (!schemaWithDays) continue;
-
-        for (const day of schemaWithDays.days) {
-          const lastWorkout = await db.getLastWorkoutForDay(day.id);
+      for (const { schema, lastWorkouts } of schemasWithLastWorkouts) {
+        for (const day of schema.days) {
           days.push({
             day,
-            schema: schemaWithDays,
-            lastWorkout,
+            schema,
+            lastWorkout: lastWorkouts.get(day.id) ?? null,
           });
         }
       }
@@ -80,16 +76,16 @@ export default function HomeScreen() {
     }, [loadWorkoutDays])
   );
 
-  const handleDayPress = async (item: WorkoutDayWithSchema) => {
+  const handleDayPress = useCallback(async (item: WorkoutDayWithSchema) => {
     try {
       await startWorkout(item.day, item.schema.id);
       router.push(`/workout/${item.day.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start workout');
     }
-  };
+  }, [startWorkout, router]);
 
-  const handleResumeWorkout = async () => {
+  const handleResumeWorkout = useCallback(async () => {
     const hasActiveSession = await resumeWorkout();
     if (hasActiveSession) {
       const activeSession = useWorkoutStore.getState().session;
@@ -97,30 +93,32 @@ export default function HomeScreen() {
         router.push(`/workout/${activeSession.dayId}`);
       }
     }
-  };
+  }, [resumeWorkout, router]);
 
-  const handleCreateSchema = () => {
+  const handleCreateSchema = useCallback(() => {
     router.push('/(tabs)/(schemas)/create');
-  };
+  }, [router]);
 
-  if (isLoading && workoutDays.length === 0) {
-    return (
-      <ThemedView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.dark.primary} />
-        </View>
-      </ThemedView>
-    );
-  }
+  const keyExtractor = useCallback(
+    (item: WorkoutDayWithSchema) => `${item.schema.id}-${item.day.id}`,
+    []
+  );
 
-  return (
-    <ThemedView style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-      >
+  const renderItem: ListRenderItem<WorkoutDayWithSchema> = useCallback(
+    ({ item }) => (
+      <WorkoutDayCard
+        day={item.day}
+        schemaName={item.schema.name}
+        lastWorkoutDate={item.lastWorkout?.completedAt}
+        onPress={() => handleDayPress(item)}
+      />
+    ),
+    [handleDayPress]
+  );
+
+  const ListHeaderComponent = useMemo(
+    () => (
+      <>
         {error && (
           <View style={styles.errorContainer}>
             <ThemedText style={styles.errorText}>{error}</ThemedText>
@@ -138,55 +136,81 @@ export default function HomeScreen() {
             <Button
               title="Resume"
               onPress={handleResumeWorkout}
-              size="small"
+              size="sm"
             />
           </View>
         )}
 
-        {workoutDays.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.placeholder}>
-              <ThemedText style={styles.placeholderText}>
-                No workout days yet
-              </ThemedText>
-              <ThemedText style={styles.placeholderSubtext}>
-                Create a schema with workout days to get started
-              </ThemedText>
-            </View>
-            <Button
-              title="Create Schema"
-              onPress={handleCreateSchema}
-              fullWidth
-            />
-          </View>
-        ) : (
-          <View style={styles.listContainer}>
-            <ThemedText style={styles.sectionTitle}>Your Workouts</ThemedText>
-            {workoutDays.map((item) => (
-              <WorkoutDayCard
-                key={`${item.schema.id}-${item.day.id}`}
-                day={item.day}
-                schemaName={item.schema.name}
-                lastWorkoutDate={item.lastWorkout?.completedAt}
-                onPress={() => handleDayPress(item)}
-              />
-            ))}
-          </View>
+        {workoutDays.length > 0 && (
+          <ThemedText style={styles.sectionTitle}>Your Workouts</ThemedText>
         )}
-      </ScrollView>
+      </>
+    ),
+    [error, session, handleResumeWorkout, workoutDays.length]
+  );
+
+  const ListEmptyComponent = useMemo(
+    () => (
+      <View style={styles.emptyContainer}>
+        <View style={styles.placeholder}>
+          <ThemedText style={styles.placeholderText}>
+            No workout days yet
+          </ThemedText>
+          <ThemedText style={styles.placeholderSubtext}>
+            Create a schema with workout days to get started
+          </ThemedText>
+        </View>
+        <Button
+          title="Create Schema"
+          onPress={handleCreateSchema}
+          fullWidth
+        />
+      </View>
+    ),
+    [handleCreateSchema]
+  );
+
+  if (isLoading && workoutDays.length === 0) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.dark.primary} />
+        </View>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.container}>
+      <FlatList
+        data={workoutDays}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        contentContainerStyle={styles.scrollContent}
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={ListHeaderComponent}
+        ListEmptyComponent={ListEmptyComponent}
+        removeClippedSubviews={true}
+        ItemSeparatorComponent={ItemSeparator}
+      />
     </ThemedView>
   );
+}
+
+function ItemSeparator() {
+  return <View style={styles.separator} />;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollContent: {
     padding: 16,
+  },
+  separator: {
+    height: 12,
   },
   loadingContainer: {
     flex: 1,
@@ -248,9 +272,6 @@ const styles = StyleSheet.create({
   placeholderSubtext: {
     opacity: 0.5,
     textAlign: 'center',
-  },
-  listContainer: {
-    gap: 12,
   },
   sectionTitle: {
     fontSize: 14,

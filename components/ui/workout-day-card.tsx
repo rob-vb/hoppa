@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/ui/card';
@@ -5,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { WorkoutDayWithExercises } from '@/db/types';
+import { formatRelativeDate } from '@/utils/format';
 
 export type WorkoutDayCardProps = {
   day: WorkoutDayWithExercises;
@@ -13,29 +15,19 @@ export type WorkoutDayCardProps = {
   onPress?: () => void;
 };
 
-function formatRelativeDate(timestamp: number): string {
-  const now = Date.now();
-  const diff = now - timestamp;
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  if (days < 14) return '1 week ago';
-  if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
-  return new Date(timestamp).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-export function WorkoutDayCard({
+export const WorkoutDayCard = memo(function WorkoutDayCard({
   day,
   schemaName,
   lastWorkoutDate,
   onPress,
 }: WorkoutDayCardProps) {
   const exerciseCount = day.exercises.length;
+
+  // Memoize formatted date to prevent recalculation
+  const formattedLastWorkout = useMemo(
+    () => (lastWorkoutDate ? formatRelativeDate(lastWorkoutDate) : null),
+    [lastWorkoutDate]
+  );
 
   return (
     <Card onPress={onPress} style={styles.card}>
@@ -65,7 +57,7 @@ export function WorkoutDayCard({
           </ThemedText>
         </View>
 
-        {lastWorkoutDate && (
+        {formattedLastWorkout && (
           <View style={styles.detailItem}>
             <IconSymbol
               name="clock"
@@ -73,7 +65,7 @@ export function WorkoutDayCard({
               color={Colors.dark.textSecondary}
             />
             <ThemedText style={styles.detailText}>
-              {formatRelativeDate(lastWorkoutDate)}
+              {formattedLastWorkout}
             </ThemedText>
           </View>
         )}
@@ -96,7 +88,7 @@ export function WorkoutDayCard({
       )}
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

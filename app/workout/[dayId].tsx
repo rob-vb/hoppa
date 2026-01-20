@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo, memo } from 'react';
 import {
   View,
   ScrollView,
@@ -23,29 +23,109 @@ import { WorkoutSummary, WorkoutSummaryData } from '@/components/ui/workout-summ
 import { useWorkoutStore } from '@/stores/workout-store';
 import { Colors } from '@/constants/theme';
 
+// Extracted formatting function to avoid recreation
+function formatTime(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Memoized progress bar component to prevent re-renders on timer tick
+type ExerciseLogForProgress = {
+  id: string;
+  status: string;
+};
+
+interface ProgressBarProps {
+  exerciseLogs: ExerciseLogForProgress[];
+  currentExerciseIndex: number;
+}
+
+const ProgressBar = memo(function ProgressBar({
+  exerciseLogs,
+  currentExerciseIndex,
+}: ProgressBarProps) {
+  return (
+    <View style={styles.progressBarBackground}>
+      {exerciseLogs.map((log, index) => (
+        <View
+          key={log.id}
+          style={[
+            styles.progressSegment,
+            index === currentExerciseIndex && styles.progressSegmentCurrent,
+            (log.status === 'completed' || log.status === 'skipped') &&
+              styles.progressSegmentCompleted,
+          ]}
+        />
+      ))}
+    </View>
+  );
+});
+
+// Memoized exercise navigation dots
+interface ExerciseNavDotsProps {
+  exerciseLogs: ExerciseLogForProgress[];
+  currentExerciseIndex: number;
+  onSelectExercise: (index: number) => void;
+}
+
+const ExerciseNavDots = memo(function ExerciseNavDots({
+  exerciseLogs,
+  currentExerciseIndex,
+  onSelectExercise,
+}: ExerciseNavDotsProps) {
+  return (
+    <View style={styles.exerciseNav}>
+      {exerciseLogs.map((log, index) => (
+        <Pressable
+          key={log.id}
+          onPress={() => {
+            if (Platform.OS === 'ios') {
+              Haptics.selectionAsync();
+            }
+            onSelectExercise(index);
+          }}
+          style={[
+            styles.navDot,
+            index === currentExerciseIndex && styles.navDotActive,
+            (log.status === 'completed' || log.status === 'skipped') &&
+              styles.navDotCompleted,
+          ]}
+        />
+      ))}
+    </View>
+  );
+});
+
 export default function ActiveWorkoutScreen() {
   useLocalSearchParams<{ dayId: string }>();
   const router = useRouter();
 
-  const {
-    session,
-    exerciseLogs,
-    currentExerciseIndex,
-    isLoading,
-    error,
-    setCurrentExercise,
-    nextExercise,
-    previousExercise,
-    logReps,
-    clearReps,
-    completeExercise,
-    skipExercise,
-    completeWorkout,
-    cancelWorkout,
-    getCurrentExerciseLog,
-    isExerciseComplete,
-    getCompletedSetsCount,
-  } = useWorkoutStore();
+  // Use individual selectors to minimize re-renders
+  const session = useWorkoutStore((state) => state.session);
+  const exerciseLogs = useWorkoutStore((state) => state.exerciseLogs);
+  const currentExerciseIndex = useWorkoutStore((state) => state.currentExerciseIndex);
+  const isLoading = useWorkoutStore((state) => state.isLoading);
+  const error = useWorkoutStore((state) => state.error);
+
+  // Get action functions (these are stable references)
+  const setCurrentExercise = useWorkoutStore((state) => state.setCurrentExercise);
+  const nextExercise = useWorkoutStore((state) => state.nextExercise);
+  const previousExercise = useWorkoutStore((state) => state.previousExercise);
+  const logReps = useWorkoutStore((state) => state.logReps);
+  const clearReps = useWorkoutStore((state) => state.clearReps);
+  const completeExercise = useWorkoutStore((state) => state.completeExercise);
+  const skipExercise = useWorkoutStore((state) => state.skipExercise);
+  const completeWorkout = useWorkoutStore((state) => state.completeWorkout);
+  const cancelWorkout = useWorkoutStore((state) => state.cancelWorkout);
+  const getCurrentExerciseLog = useWorkoutStore((state) => state.getCurrentExerciseLog);
+  const isExerciseComplete = useWorkoutStore((state) => state.isExerciseComplete);
+  const getCompletedSetsCount = useWorkoutStore((state) => state.getCompletedSetsCount);
 
   const currentExerciseLog = getCurrentExerciseLog();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -75,16 +155,8 @@ export default function ActiveWorkoutScreen() {
     return () => clearInterval(interval);
   }, [session]);
 
-  const formatTime = (totalSeconds: number): string => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
+  // Memoize formatted time to avoid string creation on every render
+  const formattedTime = useMemo(() => formatTime(elapsedSeconds), [elapsedSeconds]);
 
   const handleRepSelect = useCallback(
     async (reps: number, setId: string, setIndex: number) => {
@@ -236,6 +308,17 @@ export default function ActiveWorkoutScreen() {
     }
   }, [session, router]);
 
+  // Memoize computed values
+  const completedExercises = useMemo(
+    () =>
+      exerciseLogs.filter(
+        (log) => log.status === 'completed' || log.status === 'skipped'
+      ).length,
+    [exerciseLogs]
+  );
+
+  const totalExercises = exerciseLogs.length;
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -261,15 +344,8 @@ export default function ActiveWorkoutScreen() {
 
   const { exercise, sets, status, progressionEarned } = currentExerciseLog;
   const completedSets = getCompletedSetsCount(currentExerciseLog.id);
-  const totalSets = sets.length;
   const isCurrentExerciseComplete = isExerciseComplete(currentExerciseLog.id);
   const someSetsCompleted = completedSets > 0;
-
-  // Calculate overall workout progress
-  const completedExercises = exerciseLogs.filter(
-    (log) => log.status === 'completed' || log.status === 'skipped'
-  ).length;
-  const totalExercises = exerciseLogs.length;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -281,7 +357,7 @@ export default function ActiveWorkoutScreen() {
 
         <View style={styles.timerContainer}>
           <IconSymbol name="timer" size={16} color={Colors.dark.textSecondary} />
-          <ThemedText style={styles.timerText}>{formatTime(elapsedSeconds)}</ThemedText>
+          <ThemedText style={styles.timerText}>{formattedTime}</ThemedText>
         </View>
 
         <Pressable onPress={handleCancelWorkout} hitSlop={12}>
@@ -300,20 +376,10 @@ export default function ActiveWorkoutScreen() {
           </ThemedText>
         </View>
         <View style={styles.progressBarContainer}>
-          {/* Background segments for each exercise */}
-          <View style={styles.progressBarBackground}>
-            {exerciseLogs.map((log, index) => (
-              <View
-                key={log.id}
-                style={[
-                  styles.progressSegment,
-                  index === currentExerciseIndex && styles.progressSegmentCurrent,
-                  (log.status === 'completed' || log.status === 'skipped') &&
-                    styles.progressSegmentCompleted,
-                ]}
-              />
-            ))}
-          </View>
+          <ProgressBar
+            exerciseLogs={exerciseLogs}
+            currentExerciseIndex={currentExerciseIndex}
+          />
         </View>
       </View>
 
@@ -392,25 +458,11 @@ export default function ActiveWorkoutScreen() {
         </View>
 
         {/* Exercise Navigation */}
-        <View style={styles.exerciseNav}>
-          {exerciseLogs.map((log, index) => (
-            <Pressable
-              key={log.id}
-              onPress={() => {
-                if (Platform.OS === 'ios') {
-                  Haptics.selectionAsync();
-                }
-                setCurrentExercise(index);
-              }}
-              style={[
-                styles.navDot,
-                index === currentExerciseIndex && styles.navDotActive,
-                (log.status === 'completed' || log.status === 'skipped') &&
-                  styles.navDotCompleted,
-              ]}
-            />
-          ))}
-        </View>
+        <ExerciseNavDots
+          exerciseLogs={exerciseLogs}
+          currentExerciseIndex={currentExerciseIndex}
+          onSelectExercise={setCurrentExercise}
+        />
       </ScrollView>
 
       {/* Bottom Navigation */}

@@ -1,3 +1,4 @@
+import { memo, useCallback, useMemo } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -14,7 +15,7 @@ export type RepInputProps = {
   disabled?: boolean;
 };
 
-export function RepInput({
+export const RepInput = memo(function RepInput({
   setNumber,
   targetReps,
   completedReps,
@@ -24,37 +25,44 @@ export function RepInput({
 }: RepInputProps) {
   const isCompleted = completedReps !== null;
 
-  // Parse target reps to get quick button values
-  const [minReps, maxReps] = targetReps.split('-').map(Number);
-  const meetsTarget = completedReps !== null && completedReps >= minReps;
-  const quickButtons = generateQuickButtons(minReps, maxReps);
+  // Parse target reps to get quick button values - memoize to avoid recalculation
+  const { minReps, maxReps, quickButtons } = useMemo(() => {
+    const [min, max] = targetReps.split('-').map(Number);
+    return {
+      minReps: min,
+      maxReps: max,
+      quickButtons: generateQuickButtons(min, max),
+    };
+  }, [targetReps]);
 
-  const handleQuickButton = (reps: number) => {
+  const meetsTarget = completedReps !== null && completedReps >= minReps;
+
+  const handleQuickButton = useCallback((reps: number) => {
     if (disabled) return;
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     onLogReps(reps);
-  };
+  }, [disabled, onLogReps]);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     if (disabled || !isCompleted) return;
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     onClearReps();
-  };
+  }, [disabled, isCompleted, onClearReps]);
 
-  const handleIncrement = () => {
+  const handleIncrement = useCallback(() => {
     if (disabled) return;
     const newReps = (completedReps ?? 0) + 1;
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     onLogReps(newReps);
-  };
+  }, [disabled, completedReps, onLogReps]);
 
-  const handleDecrement = () => {
+  const handleDecrement = useCallback(() => {
     if (disabled || completedReps === null || completedReps <= 0) return;
     const newReps = completedReps - 1;
     if (Platform.OS === 'ios') {
@@ -65,7 +73,7 @@ export function RepInput({
     } else {
       onLogReps(newReps);
     }
-  };
+  }, [disabled, completedReps, onLogReps, onClearReps]);
 
   return (
     <View style={[styles.container, disabled && styles.disabled]}>
@@ -185,7 +193,7 @@ export function RepInput({
       </View>
     </View>
   );
-}
+});
 
 function generateQuickButtons(min: number, max: number): number[] {
   const buttons: number[] = [];

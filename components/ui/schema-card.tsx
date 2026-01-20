@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/ui/card';
@@ -18,7 +19,7 @@ function formatDate(timestamp: number): string {
   });
 }
 
-export function SchemaCard({ schema, onPress }: SchemaCardProps) {
+export const SchemaCard = memo(function SchemaCard({ schema, onPress }: SchemaCardProps) {
   return (
     <Card onPress={onPress} style={styles.card}>
       <View style={styles.header}>
@@ -38,7 +39,7 @@ export function SchemaCard({ schema, onPress }: SchemaCardProps) {
       </ThemedText>
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

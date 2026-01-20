@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { ActivityIndicator, SectionList, StyleSheet, View, SectionListRenderItem } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 
@@ -9,6 +9,7 @@ import { HistorySessionCard } from '@/components/ui/history-session-card';
 import { Colors } from '@/constants/theme';
 import { WorkoutSession } from '@/db/types';
 import * as db from '@/db/database';
+import { getDateGroupTitle } from '@/utils/format';
 
 interface SessionWithDetails {
   session: WorkoutSession;
@@ -18,6 +19,11 @@ interface SessionWithDetails {
   completedCount: number;
   totalReps: number;
   progressionCount: number;
+}
+
+interface SessionSection {
+  title: string;
+  data: SessionWithDetails[];
 }
 
 export default function HistoryScreen() {
@@ -30,55 +36,13 @@ export default function HistoryScreen() {
     setIsLoading(true);
     setError(null);
     try {
-      // Get completed workout sessions from the last 30 days
+      // Get completed workout sessions from the last 30 days using batch query
       const now = Date.now();
       const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-      const completedSessions = await db.getCompletedSessionsInDateRange(
+      const sessionsWithDetails = await db.getCompletedSessionsWithDetails(
         thirtyDaysAgo,
         now
       );
-
-      const sessionsWithDetails: SessionWithDetails[] = [];
-
-      for (const session of completedSessions) {
-        // Get schema and day names
-        const schema = await db.getSchemaById(session.schemaId);
-        const day = await db.getWorkoutDayById(session.dayId);
-
-        if (!schema || !day) continue;
-
-        // Get exercise logs for this session
-        const exerciseLogs = await db.getExerciseLogsBySession(session.id);
-
-        // Calculate stats
-        const exerciseCount = exerciseLogs.length;
-        const completedCount = exerciseLogs.filter(
-          (log) => log.status === 'completed'
-        ).length;
-        const progressionCount = exerciseLogs.filter(
-          (log) => log.progressionEarned
-        ).length;
-
-        // Calculate total reps
-        let totalReps = 0;
-        for (const log of exerciseLogs) {
-          const setLogs = await db.getSetLogsByExerciseLog(log.id);
-          totalReps += setLogs.reduce(
-            (sum, set) => sum + (set.completedReps ?? 0),
-            0
-          );
-        }
-
-        sessionsWithDetails.push({
-          session,
-          dayName: day.name,
-          schemaName: schema.name,
-          exerciseCount,
-          completedCount,
-          totalReps,
-          progressionCount,
-        });
-      }
 
       setSessions(sessionsWithDetails);
     } catch (err) {
@@ -100,6 +64,69 @@ export default function HistoryScreen() {
     }, [loadHistory])
   );
 
+  // Group sessions by date for SectionList - must be before early return
+  const sections = useMemo(() => groupSessionsIntoSections(sessions), [sessions]);
+
+  const handleSessionPress = useCallback(
+    (sessionId: string) => {
+      router.push(`/(history)/${sessionId}`);
+    },
+    [router]
+  );
+
+  const renderItem: SectionListRenderItem<SessionWithDetails, SessionSection> = useCallback(
+    ({ item }) => (
+      <HistorySessionCard
+        session={item.session}
+        dayName={item.dayName}
+        schemaName={item.schemaName}
+        exerciseCount={item.exerciseCount}
+        completedCount={item.completedCount}
+        totalReps={item.totalReps}
+        progressionCount={item.progressionCount}
+        onPress={() => handleSessionPress(item.session.id)}
+      />
+    ),
+    [handleSessionPress]
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: SessionSection }) => (
+      <ThemedText style={styles.sectionTitle}>{section.title}</ThemedText>
+    ),
+    []
+  );
+
+  const keyExtractor = useCallback(
+    (item: SessionWithDetails) => item.session.id,
+    []
+  );
+
+  const ListHeaderComponent = useMemo(
+    () =>
+      error ? (
+        <View style={styles.errorContainer}>
+          <ThemedText style={styles.errorText}>{error}</ThemedText>
+        </View>
+      ) : null,
+    [error]
+  );
+
+  const ListEmptyComponent = useMemo(
+    () => (
+      <View style={styles.placeholder}>
+        <ThemedText style={styles.placeholderText}>
+          No workouts in the last 30 days
+        </ThemedText>
+        <ThemedText style={styles.placeholderSubtext}>
+          Complete a workout to see it here
+        </ThemedText>
+      </View>
+    ),
+    []
+  );
+
+  // Loading state - early return after all hooks
   if (isLoading && sessions.length === 0) {
     return (
       <ThemedView style={styles.container}>
@@ -110,65 +137,36 @@ export default function HistoryScreen() {
     );
   }
 
-  // Group sessions by date
-  const groupedSessions = groupSessionsByDate(sessions);
-
   return (
     <ThemedView style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
+      <SectionList
+        sections={sections}
+        renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        keyExtractor={keyExtractor}
         contentContainerStyle={styles.scrollContent}
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
-      >
-        {error && (
-          <View style={styles.errorContainer}>
-            <ThemedText style={styles.errorText}>{error}</ThemedText>
-          </View>
-        )}
-
-        {sessions.length === 0 ? (
-          <View style={styles.placeholder}>
-            <ThemedText style={styles.placeholderText}>
-              No workouts in the last 30 days
-            </ThemedText>
-            <ThemedText style={styles.placeholderSubtext}>
-              Complete a workout to see it here
-            </ThemedText>
-          </View>
-        ) : (
-          <View style={styles.listContainer}>
-            {groupedSessions.map((group) => (
-              <View key={group.title} style={styles.dateGroup}>
-                <ThemedText style={styles.sectionTitle}>{group.title}</ThemedText>
-                {group.sessions.map((item) => (
-                  <HistorySessionCard
-                    key={item.session.id}
-                    session={item.session}
-                    dayName={item.dayName}
-                    schemaName={item.schemaName}
-                    exerciseCount={item.exerciseCount}
-                    completedCount={item.completedCount}
-                    totalReps={item.totalReps}
-                    progressionCount={item.progressionCount}
-                    onPress={() => router.push(`/(history)/${item.session.id}`)}
-                  />
-                ))}
-              </View>
-            ))}
-          </View>
-        )}
-      </ScrollView>
+        ListHeaderComponent={ListHeaderComponent}
+        ListEmptyComponent={ListEmptyComponent}
+        ItemSeparatorComponent={ItemSeparator}
+        SectionSeparatorComponent={SectionSeparator}
+        stickySectionHeadersEnabled={false}
+        removeClippedSubviews={true}
+      />
     </ThemedView>
   );
 }
 
-interface SessionGroup {
-  title: string;
-  sessions: SessionWithDetails[];
+function ItemSeparator() {
+  return <View style={styles.itemSeparator} />;
 }
 
-function groupSessionsByDate(sessions: SessionWithDetails[]): SessionGroup[] {
+function SectionSeparator() {
+  return <View style={styles.sectionSeparator} />;
+}
+
+function groupSessionsIntoSections(sessions: SessionWithDetails[]): SessionSection[] {
   const groups: Map<string, SessionWithDetails[]> = new Map();
 
   for (const session of sessions) {
@@ -181,46 +179,25 @@ function groupSessionsByDate(sessions: SessionWithDetails[]): SessionGroup[] {
     groups.get(title)!.push(session);
   }
 
-  // Convert map to array maintaining order (most recent first)
-  return Array.from(groups.entries()).map(([title, sessions]) => ({
+  // Convert map to array of sections maintaining order (most recent first)
+  return Array.from(groups.entries()).map(([title, data]) => ({
     title,
-    sessions,
+    data,
   }));
-}
-
-function getDateGroupTitle(timestamp: number): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-
-  // Reset time to compare dates only
-  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  const diff = nowOnly.getTime() - dateOnly.getTime();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return 'This Week';
-  if (days < 14) return 'Last Week';
-  if (days < 30) return 'This Month';
-
-  // Return month and year for older entries
-  return date.toLocaleDateString(undefined, {
-    month: 'long',
-    year: 'numeric',
-  });
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollContent: {
     padding: 16,
+  },
+  itemSeparator: {
+    height: 12,
+  },
+  sectionSeparator: {
+    height: 8,
   },
   loadingContainer: {
     flex: 1,
@@ -255,12 +232,6 @@ const styles = StyleSheet.create({
   placeholderSubtext: {
     opacity: 0.5,
     textAlign: 'center',
-  },
-  listContainer: {
-    gap: 20,
-  },
-  dateGroup: {
-    gap: 12,
   },
   sectionTitle: {
     fontSize: 14,
