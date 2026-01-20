@@ -118,6 +118,32 @@ export default function CreateSchemaScreen() {
     setDays(days.map((d) => (d.id === dayId ? { ...d, isExpanded: !d.isExpanded } : d)));
   };
 
+  const handleMoveDayUp = (dayId: string) => {
+    const index = days.findIndex((d) => d.id === dayId);
+    if (index <= 0) return;
+
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+
+    const newDays = [...days];
+    [newDays[index - 1], newDays[index]] = [newDays[index], newDays[index - 1]];
+    setDays(newDays);
+  };
+
+  const handleMoveDayDown = (dayId: string) => {
+    const index = days.findIndex((d) => d.id === dayId);
+    if (index < 0 || index >= days.length - 1) return;
+
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+
+    const newDays = [...days];
+    [newDays[index], newDays[index + 1]] = [newDays[index + 1], newDays[index]];
+    setDays(newDays);
+  };
+
   const handleAddExercise = (dayId: string) => {
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -405,32 +431,66 @@ export default function CreateSchemaScreen() {
 
   const renderDay = (day: LocalWorkoutDay, index: number) => (
     <Card key={day.id} style={styles.dayCard}>
-      <Pressable onPress={() => handleToggleDay(day.id)} style={styles.dayHeader}>
-        <View style={styles.dayHeaderLeft}>
-          <IconSymbol
-            name="chevron.right"
-            size={16}
-            color={Colors.dark.icon}
-            style={{ transform: [{ rotate: day.isExpanded ? '90deg' : '0deg' }] }}
-          />
-          <ThemedText type="defaultSemiBold" style={styles.dayTitle}>
-            Day {index + 1}
-            {day.name ? `: ${day.name}` : ''}
-          </ThemedText>
-        </View>
-        <View style={styles.dayHeaderRight}>
-          <ThemedText style={styles.exerciseCount}>
-            {day.exercises.length} exercise{day.exercises.length !== 1 ? 's' : ''}
-          </ThemedText>
+      <View style={styles.dayHeader}>
+        <View style={styles.reorderButtons}>
           <Pressable
-            onPress={() => handleRemoveDay(day.id)}
+            onPress={() => handleMoveDayUp(day.id)}
             hitSlop={8}
-            style={styles.removeDayButton}
+            style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
+            disabled={index === 0}
           >
-            <IconSymbol name="xmark.circle.fill" size={20} color={Colors.dark.error} />
+            <IconSymbol
+              name="chevron.up"
+              size={16}
+              color={index === 0 ? Colors.dark.border : Colors.dark.icon}
+            />
+          </Pressable>
+          <Pressable
+            onPress={() => handleMoveDayDown(day.id)}
+            hitSlop={8}
+            style={[
+              styles.reorderButton,
+              index === days.length - 1 && styles.reorderButtonDisabled,
+            ]}
+            disabled={index === days.length - 1}
+          >
+            <IconSymbol
+              name="chevron.down"
+              size={16}
+              color={index === days.length - 1 ? Colors.dark.border : Colors.dark.icon}
+            />
           </Pressable>
         </View>
-      </Pressable>
+        <Pressable
+          onPress={() => handleToggleDay(day.id)}
+          style={styles.dayHeaderMain}
+        >
+          <View style={styles.dayHeaderLeft}>
+            <IconSymbol
+              name="chevron.right"
+              size={16}
+              color={Colors.dark.icon}
+              style={{ transform: [{ rotate: day.isExpanded ? '90deg' : '0deg' }] }}
+            />
+            <ThemedText type="defaultSemiBold" style={styles.dayTitle}>
+              Day {index + 1}
+              {day.name ? `: ${day.name}` : ''}
+            </ThemedText>
+          </View>
+          <View style={styles.dayHeaderRight}>
+            <ThemedText style={styles.exerciseCount}>
+              {day.exercises.length} exercise{day.exercises.length !== 1 ? 's' : ''}
+            </ThemedText>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => handleRemoveDay(day.id)}
+          hitSlop={8}
+          style={styles.removeDayButton}
+        >
+          <IconSymbol name="xmark.circle.fill" size={20} color={Colors.dark.error} />
+        </Pressable>
+      </View>
 
       {day.isExpanded && (
         <View style={styles.dayContent}>
@@ -614,8 +674,24 @@ const styles = StyleSheet.create({
   dayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 12,
+    gap: 8,
+  },
+  reorderButtons: {
+    flexDirection: 'column',
+    gap: 2,
+  },
+  reorderButton: {
+    padding: 4,
+  },
+  reorderButtonDisabled: {
+    opacity: 0.3,
+  },
+  dayHeaderMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
   },
   dayHeaderLeft: {
     flexDirection: 'row',
@@ -626,7 +702,6 @@ const styles = StyleSheet.create({
   dayHeaderRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   dayTitle: {
     fontSize: 16,
