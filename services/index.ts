@@ -12,3 +12,15 @@ export {
   type SchemaExtractionError,
   type SchemaExtractionResponse,
 } from './claude-api';
+
+export {
+  parseAIResponseJSON,
+  parseAISchemaResponse,
+  parseAndConvertAIResponse,
+  convertExtractedSchemaToLocal,
+  type LocalExercise,
+  type LocalWorkoutDay,
+  type ParsedSchemaResult,
+  type ParsedSchemaError,
+  type ParseSchemaResult,
+} from './schema-parser';
