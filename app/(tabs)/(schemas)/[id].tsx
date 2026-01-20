@@ -210,6 +210,35 @@ export default function SchemaDetailsScreen() {
     field: keyof Omit<Exercise, 'id' | 'dayId'>,
     value: string | number | boolean
   ) => {
+    // Find the exercise to get current values for validation
+    const exercise = currentSchema?.days
+      .flatMap((d) => d.exercises)
+      .find((e) => e.id === exerciseId);
+
+    if (!exercise) return;
+
+    // Validate rep range constraints
+    if (field === 'targetRepsMin' && typeof value === 'number') {
+      if (value > exercise.targetRepsMax) {
+        Alert.alert('Invalid Range', 'Min reps cannot be greater than max reps');
+        return;
+      }
+    }
+    if (field === 'targetRepsMax' && typeof value === 'number') {
+      if (value < exercise.targetRepsMin) {
+        Alert.alert('Invalid Range', 'Max reps cannot be less than min reps');
+        return;
+      }
+    }
+
+    // Validate progression increment must be positive
+    if (field === 'progressionIncrement' && typeof value === 'number') {
+      if (value <= 0) {
+        Alert.alert('Invalid Increment', 'Progression increment must be greater than 0');
+        return;
+      }
+    }
+
     try {
       await updateExercise(exerciseId, { [field]: value });
     } catch {

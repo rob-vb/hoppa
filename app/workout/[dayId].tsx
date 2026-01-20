@@ -58,6 +58,9 @@ export default function ActiveWorkoutScreen() {
   const [showSummary, setShowSummary] = useState(false);
   const [summaryData, setSummaryData] = useState<WorkoutSummaryData | null>(null);
 
+  // Debounce state to prevent double-tap issues
+  const [isProcessingExercise, setIsProcessingExercise] = useState(false);
+
   useEffect(() => {
     if (!session) return;
 
@@ -126,34 +129,44 @@ export default function ActiveWorkoutScreen() {
   );
 
   const handleCompleteExercise = useCallback(async () => {
-    if (!currentExerciseLog) return;
+    if (!currentExerciseLog || isProcessingExercise) return;
 
-    if (Platform.OS === 'ios') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setIsProcessingExercise(true);
+    try {
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      await completeExercise(currentExerciseLog.id);
+
+      // Auto-advance to next exercise
+      if (currentExerciseIndex < exerciseLogs.length - 1) {
+        nextExercise();
+      }
+    } finally {
+      setIsProcessingExercise(false);
     }
-
-    await completeExercise(currentExerciseLog.id);
-
-    // Auto-advance to next exercise
-    if (currentExerciseIndex < exerciseLogs.length - 1) {
-      nextExercise();
-    }
-  }, [currentExerciseLog, completeExercise, currentExerciseIndex, exerciseLogs.length, nextExercise]);
+  }, [currentExerciseLog, completeExercise, currentExerciseIndex, exerciseLogs.length, nextExercise, isProcessingExercise]);
 
   const handleSkipExercise = useCallback(async () => {
-    if (!currentExerciseLog) return;
+    if (!currentExerciseLog || isProcessingExercise) return;
 
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsProcessingExercise(true);
+    try {
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+
+      await skipExercise(currentExerciseLog.id);
+
+      // Auto-advance to next exercise
+      if (currentExerciseIndex < exerciseLogs.length - 1) {
+        nextExercise();
+      }
+    } finally {
+      setIsProcessingExercise(false);
     }
-
-    await skipExercise(currentExerciseLog.id);
-
-    // Auto-advance to next exercise
-    if (currentExerciseIndex < exerciseLogs.length - 1) {
-      nextExercise();
-    }
-  }, [currentExerciseLog, skipExercise, currentExerciseIndex, exerciseLogs.length, nextExercise]);
+  }, [currentExerciseLog, skipExercise, currentExerciseIndex, exerciseLogs.length, nextExercise, isProcessingExercise]);
 
   const handleFinishWorkout = useCallback(async () => {
     Alert.alert(
@@ -346,15 +359,16 @@ export default function ActiveWorkoutScreen() {
           {!isCurrentExerciseComplete ? (
             <>
               <Button
-                title="Finish Exercise"
+                title={isProcessingExercise ? 'Processing...' : 'Finish Exercise'}
                 onPress={handleCompleteExercise}
-                disabled={!someSetsCompleted}
+                disabled={!someSetsCompleted || isProcessingExercise}
                 fullWidth
               />
               <Button
                 title="Skip Exercise"
                 variant="ghost"
                 onPress={handleSkipExercise}
+                disabled={isProcessingExercise}
                 fullWidth
               />
             </>

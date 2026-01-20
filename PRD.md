@@ -76,9 +76,9 @@
 - [x] Build history tab `(history)/index.tsx`
 - [x] Show last 30 days of workouts
 - [x] Display workout summary (date, schema, day, duration)
-- [ ] Show exercise logs with sets/reps
-- [ ] Indicate progressions earned per workout
-- [ ] Bug fixes and edge case handling
+- [x] Show exercise logs with sets/reps
+- [x] Indicate progressions earned per workout
+- [x] Bug fixes and edge case handling
 - [ ] Performance optimization
 - [ ] Comprehensive testing
 

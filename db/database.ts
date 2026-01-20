@@ -232,15 +232,25 @@ export async function deleteSchema(id: string): Promise<void> {
 export async function createWorkoutDay(
   schemaId: string,
   name: string,
-  orderIndex: number
+  orderIndex?: number
 ): Promise<WorkoutDay> {
   const database = await getDatabase();
   const id = generateId();
 
+  // If orderIndex not provided, calculate from existing days to avoid race conditions
+  let actualOrderIndex = orderIndex;
+  if (actualOrderIndex === undefined) {
+    const result = await database.getFirstAsync<{ maxOrder: number | null }>(
+      'SELECT MAX(order_index) as maxOrder FROM workout_days WHERE schema_id = ?',
+      [schemaId]
+    );
+    actualOrderIndex = (result?.maxOrder ?? -1) + 1;
+  }
+
   await database.runAsync(
     `INSERT INTO workout_days (id, schema_id, name, order_index)
      VALUES (?, ?, ?, ?)`,
-    [id, schemaId, name, orderIndex]
+    [id, schemaId, name, actualOrderIndex]
   );
 
   // Update schema's updated_at
@@ -249,7 +259,7 @@ export async function createWorkoutDay(
     [Date.now(), schemaId]
   );
 
-  return { id, schemaId, name, orderIndex };
+  return { id, schemaId, name, orderIndex: actualOrderIndex };
 }
 
 export async function getWorkoutDaysBySchema(schemaId: string): Promise<WorkoutDay[]> {
@@ -323,9 +333,19 @@ export async function deleteWorkoutDay(id: string): Promise<void> {
 // Exercise Operations
 // ============================================
 
-export async function createExercise(exercise: Omit<Exercise, 'id'>): Promise<Exercise> {
+export async function createExercise(exercise: Omit<Exercise, 'id'> & { orderIndex?: number }): Promise<Exercise> {
   const database = await getDatabase();
   const id = generateId();
+
+  // If orderIndex not provided, calculate from existing exercises to avoid race conditions
+  let actualOrderIndex = exercise.orderIndex;
+  if (actualOrderIndex === undefined) {
+    const result = await database.getFirstAsync<{ maxOrder: number | null }>(
+      'SELECT MAX(order_index) as maxOrder FROM exercises WHERE day_id = ?',
+      [exercise.dayId]
+    );
+    actualOrderIndex = (result?.maxOrder ?? -1) + 1;
+  }
 
   await database.runAsync(
     `INSERT INTO exercises (id, day_id, name, equipment_type, base_weight, target_sets,
@@ -344,11 +364,11 @@ export async function createExercise(exercise: Omit<Exercise, 'id'>): Promise<Ex
       exercise.progressiveLoadingEnabled ? 1 : 0,
       exercise.progressionIncrement,
       exercise.currentWeight,
-      exercise.orderIndex,
+      actualOrderIndex,
     ]
   );
 
-  return { id, ...exercise };
+  return { id, ...exercise, orderIndex: actualOrderIndex };
 }
 
 export async function getExercisesByDay(dayId: string): Promise<Exercise[]> {
@@ -561,6 +581,8 @@ export async function getWorkoutSessionById(id: string): Promise<WorkoutSession 
 
 export async function getActiveWorkoutSession(): Promise<WorkoutSession | null> {
   const database = await getDatabase();
+  // Order by started_at DESC to always get the most recent active session
+  // This ensures consistent behavior if multiple in_progress sessions exist
   const row = await database.getFirstAsync<{
     id: string;
     schema_id: string;
@@ -568,7 +590,7 @@ export async function getActiveWorkoutSession(): Promise<WorkoutSession | null> 
     started_at: number;
     completed_at: number | null;
     status: WorkoutStatus;
-  }>("SELECT * FROM workout_sessions WHERE status = 'in_progress' LIMIT 1");
+  }>("SELECT * FROM workout_sessions WHERE status = 'in_progress' ORDER BY started_at DESC LIMIT 1");
 
   if (!row) return null;
 

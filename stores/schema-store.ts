@@ -152,10 +152,8 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
   addWorkoutDay: async (schemaId: string, name: string) => {
     set({ isLoading: true, error: null });
     try {
-      const { currentSchema } = get();
-      const orderIndex = currentSchema?.days.length ?? 0;
-
-      const day = await db.createWorkoutDay(schemaId, name, orderIndex);
+      // Let the database calculate the orderIndex to avoid race conditions
+      const day = await db.createWorkoutDay(schemaId, name);
 
       // Update currentSchema if it's the one being modified
       set((state) => {
@@ -247,14 +245,10 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
   ) => {
     set({ isLoading: true, error: null });
     try {
-      const { currentSchema } = get();
-      const day = currentSchema?.days.find((d) => d.id === dayId);
-      const orderIndex = day?.exercises.length ?? 0;
-
+      // Let the database calculate the orderIndex to avoid race conditions
       const newExercise = await db.createExercise({
         ...exercise,
         dayId,
-        orderIndex,
       });
 
       set((state) => {

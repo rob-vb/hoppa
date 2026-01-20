@@ -66,10 +66,21 @@ export function calculatePlates(
   availablePlates: readonly number[] = STANDARD_PLATES,
   availableMicroplates: readonly number[] = MICROPLATES
 ): PlateResult {
+  // Handle invalid input: negative weights
+  if (targetWeight < 0 || baseWeight < 0) {
+    return {
+      platesPerSide: [],
+      totalPlateWeight: 0,
+      achievable: false,
+      remainder: 0,
+      achievedWeight: Math.max(0, baseWeight),
+    };
+  }
+
   // Weight to distribute across both sides
   const weightToLoad = targetWeight - baseWeight;
 
-  // Handle edge cases
+  // Handle edge cases: target weight less than or equal to base weight
   if (weightToLoad <= 0) {
     return {
       platesPerSide: [],
