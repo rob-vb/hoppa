@@ -54,9 +54,9 @@
 - [x] Distinguish gym plates vs personal microplates in visualization
 - [x] Build rep input component with large touch targets
 - [x] Implement quick rep buttons
-- [ ] Add auto-advance to next set after input
-- [ ] Show visual feedback (checkmark) when rep meets target
-- [ ] Implement Skip exercise functionality
+- [x] Add auto-advance to next set after input
+- [x] Show visual feedback (checkmark) when rep meets target
+- [x] Implement Skip exercise functionality
 - [ ] Implement Finish exercise functionality
 - [ ] Show workout progress bar (exercise X of Y)
 - [ ] Add workout timer display
