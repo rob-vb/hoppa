@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   LayoutChangeEvent,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ExerciseCard } from '@/components/ui/exercise-card';
 import { RepInput } from '@/components/ui/rep-input';
+import { WorkoutSummary, WorkoutSummaryData } from '@/components/ui/workout-summary';
 import { useWorkoutStore } from '@/stores/workout-store';
 import { Colors } from '@/constants/theme';
 
@@ -51,6 +53,10 @@ export default function ActiveWorkoutScreen() {
 
   // Workout timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Summary modal state
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryData, setSummaryData] = useState<WorkoutSummaryData | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -161,13 +167,24 @@ export default function ActiveWorkoutScreen() {
             if (Platform.OS === 'ios') {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }
-            await completeWorkout();
-            router.back();
+            const summary = await completeWorkout();
+            if (summary) {
+              setSummaryData(summary);
+              setShowSummary(true);
+            } else {
+              router.back();
+            }
           },
         },
       ]
     );
   }, [completeWorkout, router]);
+
+  const handleSummaryDone = useCallback(() => {
+    setShowSummary(false);
+    setSummaryData(null);
+    router.back();
+  }, [router]);
 
   const handleCancelWorkout = useCallback(() => {
     Alert.alert(
@@ -458,6 +475,19 @@ export default function ActiveWorkoutScreen() {
           )}
         </View>
       </SafeAreaView>
+
+      {/* Workout Summary Modal */}
+      <Modal
+        visible={showSummary}
+        animationType="slide"
+        presentationStyle="fullScreen"
+      >
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+          {summaryData && (
+            <WorkoutSummary data={summaryData} onDone={handleSummaryDone} />
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }

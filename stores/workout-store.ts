@@ -24,11 +24,25 @@ interface WorkoutState {
   error: string | null;
 }
 
+export interface WorkoutSummaryData {
+  duration: number;
+  completedExercises: number;
+  skippedExercises: number;
+  totalExercises: number;
+  progressionsEarned: Array<{
+    exerciseName: string;
+    oldWeight: number;
+    newWeight: number;
+  }>;
+  totalSetsCompleted: number;
+  totalReps: number;
+}
+
 interface WorkoutActions {
   // Session management
   startWorkout: (day: WorkoutDayWithExercises, schemaId: string) => Promise<void>;
   resumeWorkout: () => Promise<boolean>;
-  completeWorkout: () => Promise<void>;
+  completeWorkout: () => Promise<WorkoutSummaryData | null>;
   cancelWorkout: () => Promise<void>;
 
   // Exercise navigation
@@ -52,6 +66,7 @@ interface WorkoutActions {
   getCurrentExerciseLog: () => ActiveExerciseLog | null;
   isExerciseComplete: (exerciseLogId: string) => boolean;
   getCompletedSetsCount: (exerciseLogId: string) => number;
+  getWorkoutSummary: () => WorkoutSummaryData | null;
 }
 
 type WorkoutStore = WorkoutState & WorkoutActions;
@@ -160,11 +175,14 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
   },
 
   completeWorkout: async () => {
-    const { session, exerciseLogs } = get();
-    if (!session) return;
+    const { session, exerciseLogs, getWorkoutSummary } = get();
+    if (!session) return null;
 
     set({ isLoading: true, error: null });
     try {
+      // Generate summary before clearing state
+      const summary = getWorkoutSummary();
+
       // Apply progressions for completed exercises
       for (const log of exerciseLogs) {
         if (log.status === 'completed' && log.progressionEarned) {
@@ -183,6 +201,8 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
         currentExerciseIndex: 0,
         isLoading: false,
       });
+
+      return summary;
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to complete workout',
@@ -376,5 +396,49 @@ export const useWorkoutStore = create<WorkoutStore>((set, get) => ({
     const log = exerciseLogs.find((l) => l.id === exerciseLogId);
     if (!log) return 0;
     return log.sets.filter((s) => s.completedReps !== null).length;
+  },
+
+  getWorkoutSummary: () => {
+    const { session, exerciseLogs } = get();
+    if (!session) return null;
+
+    const duration = Math.floor((Date.now() - session.startedAt) / 1000);
+    const completedExercises = exerciseLogs.filter(
+      (log) => log.status === 'completed'
+    ).length;
+    const skippedExercises = exerciseLogs.filter(
+      (log) => log.status === 'skipped'
+    ).length;
+    const totalExercises = exerciseLogs.length;
+
+    const progressionsEarned = exerciseLogs
+      .filter((log) => log.status === 'completed' && log.progressionEarned)
+      .map((log) => ({
+        exerciseName: log.exercise.name,
+        oldWeight: log.exercise.currentWeight,
+        newWeight: log.exercise.currentWeight + log.exercise.progressionIncrement,
+      }));
+
+    let totalSetsCompleted = 0;
+    let totalReps = 0;
+
+    for (const log of exerciseLogs) {
+      for (const set of log.sets) {
+        if (set.completedReps !== null) {
+          totalSetsCompleted++;
+          totalReps += set.completedReps;
+        }
+      }
+    }
+
+    return {
+      duration,
+      completedExercises,
+      skippedExercises,
+      totalExercises,
+      progressionsEarned,
+      totalSetsCompleted,
+      totalReps,
+    };
   },
 }));
