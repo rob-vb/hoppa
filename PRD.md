@@ -41,19 +41,19 @@
 - [x] Parse AI response into schema structure
 - [x] Build review/edit screen for extracted schema
 - [x] Add rate limiting (3 imports/month for free tier)
-- [ ] Handle error states (unclear image, partial extraction, API errors)
+- [x] Handle error states (unclear image, partial extraction, API errors)
 
 #### Workout Execution (2 weeks)
-- [ ] Create Zustand workout store
-- [ ] Build home screen with workout day cards `(home)/index.tsx`
-- [ ] Show "last workout" date on day cards
-- [ ] Build active workout screen `workout/[dayId].tsx` (fullscreen modal)
-- [ ] Create exercise card component with current exercise display
-- [ ] Build plate calculator utility (`utils/plate-calculator.ts`)
-- [ ] Create plate visualizer component (visual barbell breakdown)
-- [ ] Distinguish gym plates vs personal microplates in visualization
-- [ ] Build rep input component with large touch targets
-- [ ] Implement quick rep buttons
+- [x] Create Zustand workout store
+- [x] Build home screen with workout day cards `(home)/index.tsx`
+- [x] Show "last workout" date on day cards
+- [x] Build active workout screen `workout/[dayId].tsx` (fullscreen modal)
+- [x] Create exercise card component with current exercise display
+- [x] Build plate calculator utility (`utils/plate-calculator.ts`)
+- [x] Create plate visualizer component (visual barbell breakdown)
+- [x] Distinguish gym plates vs personal microplates in visualization
+- [x] Build rep input component with large touch targets
+- [x] Implement quick rep buttons
 - [ ] Add auto-advance to next set after input
 - [ ] Show visual feedback (checkmark) when rep meets target
 - [ ] Implement Skip exercise functionality

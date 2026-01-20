@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import {
   View,
   ScrollView,
@@ -16,11 +16,9 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ExerciseCard } from '@/components/ui/exercise-card';
+import { RepInput } from '@/components/ui/rep-input';
 import { useWorkoutStore } from '@/stores/workout-store';
 import { Colors } from '@/constants/theme';
-import { SetLog } from '@/db/types';
-
-const REP_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20];
 
 export default function ActiveWorkoutScreen() {
   useLocalSearchParams<{ dayId: string }>();
@@ -36,6 +34,7 @@ export default function ActiveWorkoutScreen() {
     nextExercise,
     previousExercise,
     logReps,
+    clearReps,
     completeExercise,
     skipExercise,
     completeWorkout,
@@ -45,44 +44,28 @@ export default function ActiveWorkoutScreen() {
     getCompletedSetsCount,
   } = useWorkoutStore();
 
-  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
-
   const currentExerciseLog = getCurrentExerciseLog();
 
-  // Auto-select first incomplete set when exercise changes
-  useEffect(() => {
-    if (currentExerciseLog) {
-      const firstIncompleteSet = currentExerciseLog.sets.find(
-        (s) => s.completedReps === null
-      );
-      setSelectedSetId(firstIncompleteSet?.id ?? currentExerciseLog.sets[0]?.id ?? null);
-    }
-  }, [currentExerciseIndex, currentExerciseLog]);
-
   const handleRepSelect = useCallback(
-    async (reps: number) => {
-      if (!selectedSetId) return;
-
+    async (reps: number, setId: string) => {
       if (Platform.OS === 'ios') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
 
-      await logReps(selectedSetId, reps);
-
-      // Auto-advance to next incomplete set
-      if (currentExerciseLog) {
-        const currentSetIndex = currentExerciseLog.sets.findIndex(
-          (s) => s.id === selectedSetId
-        );
-        const nextIncompleteSet = currentExerciseLog.sets.find(
-          (s, i) => i > currentSetIndex && s.completedReps === null
-        );
-        if (nextIncompleteSet) {
-          setSelectedSetId(nextIncompleteSet.id);
-        }
-      }
+      await logReps(setId, reps);
     },
-    [selectedSetId, logReps, currentExerciseLog]
+    [logReps]
+  );
+
+  const handleClearReps = useCallback(
+    async (setId: string) => {
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+
+      await clearReps(setId);
+    },
+    [clearReps]
   );
 
   const handleCompleteExercise = useCallback(async () => {
@@ -251,67 +234,20 @@ export default function ActiveWorkoutScreen() {
           completedSetsCount={completedSets}
         />
 
-        {/* Sets */}
-        <View style={styles.setsSection}>
-          <ThemedText style={styles.sectionLabel}>
-            Sets ({completedSets}/{totalSets})
-          </ThemedText>
-
-          <View style={styles.setsGrid}>
+        {/* Rep Input - Quick Buttons for each Set */}
+        {!isCurrentExerciseComplete && (
+          <View style={styles.repInputSection}>
             {sets.map((set, index) => (
-              <SetButton
+              <RepInput
                 key={set.id}
-                set={set}
-                index={index}
-                isSelected={selectedSetId === set.id}
-                targetMax={exercise.targetRepsMax}
+                setNumber={index + 1}
+                targetReps={`${exercise.targetRepsMin}-${exercise.targetRepsMax}`}
+                completedReps={set.completedReps}
+                onLogReps={(reps) => handleRepSelect(reps, set.id)}
+                onClearReps={() => handleClearReps(set.id)}
                 disabled={isCurrentExerciseComplete}
-                onPress={() => {
-                  if (!isCurrentExerciseComplete) {
-                    if (Platform.OS === 'ios') {
-                      Haptics.selectionAsync();
-                    }
-                    setSelectedSetId(set.id);
-                  }
-                }}
               />
             ))}
-          </View>
-        </View>
-
-        {/* Rep Input */}
-        {!isCurrentExerciseComplete && selectedSetId && (
-          <View style={styles.repInputSection}>
-            <ThemedText style={styles.sectionLabel}>
-              Log Reps for Set{' '}
-              {sets.findIndex((s) => s.id === selectedSetId) + 1}
-            </ThemedText>
-
-            <View style={styles.repGrid}>
-              {REP_OPTIONS.map((rep) => (
-                <Pressable
-                  key={rep}
-                  onPress={() => handleRepSelect(rep)}
-                  style={({ pressed }) => [
-                    styles.repButton,
-                    pressed && styles.repButtonPressed,
-                    rep >= exercise.targetRepsMin &&
-                      rep <= exercise.targetRepsMax &&
-                      styles.repButtonTarget,
-                    rep >= exercise.targetRepsMax && styles.repButtonMax,
-                  ]}
-                >
-                  <ThemedText
-                    style={[
-                      styles.repButtonText,
-                      rep >= exercise.targetRepsMax && styles.repButtonTextMax,
-                    ]}
-                  >
-                    {rep}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
           </View>
         )}
 
@@ -453,55 +389,6 @@ export default function ActiveWorkoutScreen() {
   );
 }
 
-// Set Button Component
-function SetButton({
-  set,
-  index,
-  isSelected,
-  targetMax,
-  disabled,
-  onPress,
-}: {
-  set: SetLog;
-  index: number;
-  isSelected: boolean;
-  targetMax: number;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const isCompleted = set.completedReps !== null;
-  const hitMax = set.completedReps !== null && set.completedReps >= targetMax;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.setButton,
-        isSelected && styles.setButtonSelected,
-        isCompleted && styles.setButtonCompleted,
-        hitMax && styles.setButtonMax,
-        pressed && !disabled && styles.setButtonPressed,
-        disabled && styles.setButtonDisabled,
-      ]}
-    >
-      <ThemedText style={styles.setLabel}>Set {index + 1}</ThemedText>
-      <ThemedText
-        style={[
-          styles.setReps,
-          isCompleted && styles.setRepsCompleted,
-          hitMax && styles.setRepsMax,
-        ]}
-      >
-        {isCompleted ? set.completedReps : set.targetReps}
-      </ThemedText>
-      {hitMax && (
-        <IconSymbol name="checkmark.circle.fill" size={16} color="#22C55E" />
-      )}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -561,95 +448,9 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 100,
   },
-  setsSection: {
-    marginBottom: 24,
-  },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.dark.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  setsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  setButton: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 12,
-    padding: 16,
-    minWidth: 90,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  setButtonSelected: {
-    borderColor: Colors.dark.primary,
-  },
-  setButtonCompleted: {
-    backgroundColor: Colors.dark.surface,
-  },
-  setButtonMax: {
-    backgroundColor: '#22C55E20',
-    borderColor: '#22C55E40',
-  },
-  setButtonPressed: {
-    opacity: 0.8,
-  },
-  setButtonDisabled: {
-    opacity: 0.6,
-  },
-  setLabel: {
-    fontSize: 12,
-    color: Colors.dark.textSecondary,
-    marginBottom: 4,
-  },
-  setReps: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: Colors.dark.text,
-  },
-  setRepsCompleted: {
-    color: Colors.dark.primary,
-  },
-  setRepsMax: {
-    color: '#22C55E',
-  },
   repInputSection: {
-    marginBottom: 24,
-  },
-  repGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  repButton: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    minWidth: 50,
-    alignItems: 'center',
-  },
-  repButtonPressed: {
-    opacity: 0.7,
-  },
-  repButtonTarget: {
-    backgroundColor: Colors.dark.primary + '30',
-  },
-  repButtonMax: {
-    backgroundColor: '#22C55E30',
-  },
-  repButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.dark.text,
-  },
-  repButtonTextMax: {
-    color: '#22C55E',
+    marginTop: 16,
+    gap: 12,
   },
   exerciseActions: {
     gap: 12,
