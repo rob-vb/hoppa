@@ -29,9 +29,9 @@
 - [x] Add equipment type selector (plates/machine/other)
 - [x] Add base weight input
 - [x] Add target sets and rep range inputs
-- [ ] Add progressive loading toggles (schema-level and exercise-level)
-- [ ] Add progression increment selector (2.5kg/5kg/custom)
-- [ ] Build schema details/edit screen `(schemas)/[schemaId].tsx`
+- [x] Add progressive loading toggles (schema-level and exercise-level)
+- [x] Add progression increment selector (2.5kg/5kg/custom)
+- [x] Build schema details/edit screen `(schemas)/[id].tsx`
 - [ ] Build schema card component for list view
 
 #### AI Schema Import (1 week)
