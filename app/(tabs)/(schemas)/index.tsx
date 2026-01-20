@@ -4,8 +4,8 @@ import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { SchemaCard } from '@/components/ui/schema-card';
 import { useSchemaStore } from '@/stores/schema-store';
 import { Colors } from '@/constants/theme';
 
@@ -23,14 +23,6 @@ export default function SchemasScreen() {
 
   const handleCreatePress = () => {
     router.push('/(tabs)/(schemas)/create');
-  };
-
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
   };
 
   if (isLoading && schemas.length === 0) {
@@ -76,27 +68,11 @@ export default function SchemasScreen() {
         ) : (
           <View style={styles.listContainer}>
             {schemas.map((schema) => (
-              <Card
+              <SchemaCard
                 key={schema.id}
+                schema={schema}
                 onPress={() => handleSchemaPress(schema.id)}
-                style={styles.schemaCard}
-              >
-                <View style={styles.schemaHeader}>
-                  <ThemedText type="defaultSemiBold" style={styles.schemaName}>
-                    {schema.name}
-                  </ThemedText>
-                  {schema.progressiveLoadingEnabled && (
-                    <View style={styles.progressionBadge}>
-                      <ThemedText style={styles.progressionBadgeText}>
-                        Progressive
-                      </ThemedText>
-                    </View>
-                  )}
-                </View>
-                <ThemedText style={styles.schemaDate}>
-                  Updated {formatDate(schema.updatedAt)}
-                </ThemedText>
-              </Card>
+              />
             ))}
             <Button
               title="Create New Schema"
@@ -160,32 +136,5 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     gap: 12,
-  },
-  schemaCard: {
-    gap: 8,
-  },
-  schemaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  schemaName: {
-    fontSize: 18,
-    flex: 1,
-  },
-  progressionBadge: {
-    backgroundColor: Colors.dark.primary + '30',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  progressionBadgeText: {
-    fontSize: 12,
-    color: Colors.dark.primary,
-    fontWeight: '500',
-  },
-  schemaDate: {
-    fontSize: 14,
-    opacity: 0.6,
   },
 });
