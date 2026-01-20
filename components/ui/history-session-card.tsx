@@ -13,6 +13,7 @@ export type HistorySessionCardProps = {
   exerciseCount: number;
   completedCount: number;
   totalReps: number;
+  progressionCount: number;
   onPress?: () => void;
 };
 
@@ -71,6 +72,7 @@ export function HistorySessionCard({
   exerciseCount,
   completedCount,
   totalReps,
+  progressionCount,
   onPress,
 }: HistorySessionCardProps) {
   const completedAt = session.completedAt ?? session.startedAt;
@@ -132,6 +134,19 @@ export function HistorySessionCard({
             <ThemedText style={styles.statText}>{totalReps} reps</ThemedText>
           </View>
         )}
+
+        {progressionCount > 0 && (
+          <View style={styles.statItem}>
+            <IconSymbol
+              name="arrow.up.circle.fill"
+              size={14}
+              color="#22C55E"
+            />
+            <ThemedText style={styles.statTextProgression}>
+              {progressionCount} {progressionCount === 1 ? 'progression' : 'progressions'}
+            </ThemedText>
+          </View>
+        )}
       </View>
     </Card>
   );
@@ -188,5 +203,9 @@ const styles = StyleSheet.create({
   },
   statTextHighlight: {
     color: Colors.dark.primary,
+  },
+  statTextProgression: {
+    fontSize: 13,
+    color: '#22C55E',
   },
 });

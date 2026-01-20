@@ -17,6 +17,7 @@ interface SessionWithDetails {
   exerciseCount: number;
   completedCount: number;
   totalReps: number;
+  progressionCount: number;
 }
 
 export default function HistoryScreen() {
@@ -54,6 +55,9 @@ export default function HistoryScreen() {
         const completedCount = exerciseLogs.filter(
           (log) => log.status === 'completed'
         ).length;
+        const progressionCount = exerciseLogs.filter(
+          (log) => log.progressionEarned
+        ).length;
 
         // Calculate total reps
         let totalReps = 0;
@@ -72,6 +76,7 @@ export default function HistoryScreen() {
           exerciseCount,
           completedCount,
           totalReps,
+          progressionCount,
         });
       }
 
@@ -145,6 +150,7 @@ export default function HistoryScreen() {
                     exerciseCount={item.exerciseCount}
                     completedCount={item.completedCount}
                     totalReps={item.totalReps}
+                    progressionCount={item.progressionCount}
                     onPress={() => router.push(`/(history)/${item.session.id}`)}
                   />
                 ))}
