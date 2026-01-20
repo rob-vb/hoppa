@@ -25,6 +25,10 @@ export default function SchemasScreen() {
     router.push('/(tabs)/(schemas)/create');
   };
 
+  const handleAIImportPress = () => {
+    router.push('/(tabs)/(schemas)/ai-import');
+  };
+
   if (isLoading && schemas.length === 0) {
     return (
       <ThemedView style={styles.container}>
@@ -59,11 +63,19 @@ export default function SchemasScreen() {
                 Create your first schema to get started
               </ThemedText>
             </View>
-            <Button
-              title="Create Schema"
-              onPress={handleCreatePress}
-              fullWidth
-            />
+            <View style={styles.buttonGroup}>
+              <Button
+                title="Create Schema"
+                onPress={handleCreatePress}
+                fullWidth
+              />
+              <Button
+                title="Import with AI"
+                variant="secondary"
+                onPress={handleAIImportPress}
+                fullWidth
+              />
+            </View>
           </View>
         ) : (
           <View style={styles.listContainer}>
@@ -74,12 +86,20 @@ export default function SchemasScreen() {
                 onPress={() => handleSchemaPress(schema.id)}
               />
             ))}
-            <Button
-              title="Create New Schema"
-              variant="secondary"
-              onPress={handleCreatePress}
-              fullWidth
-            />
+            <View style={styles.buttonGroup}>
+              <Button
+                title="Create New Schema"
+                variant="secondary"
+                onPress={handleCreatePress}
+                fullWidth
+              />
+              <Button
+                title="Import with AI"
+                variant="secondary"
+                onPress={handleAIImportPress}
+                fullWidth
+              />
+            </View>
           </View>
         )}
       </ScrollView>
@@ -135,6 +155,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   listContainer: {
+    gap: 12,
+  },
+  buttonGroup: {
     gap: 12,
   },
 });

@@ -35,6 +35,19 @@ export default function SchemasLayout() {
           title: 'Schema Details',
         }}
       />
+      <Stack.Screen
+        name="ai-import"
+        options={{
+          title: 'Import Schema',
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
+        name="ai-review"
+        options={{
+          title: 'Review Imported Schema',
+        }}
+      />
     </Stack>
   );
 }
