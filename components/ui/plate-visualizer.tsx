@@ -66,6 +66,9 @@ export function PlateVisualizer({
   const result = plateResult ?? calculatePlates(targetWeight, baseWeight);
   const { platesPerSide } = result;
 
+  // Check if any microplates are used
+  const hasMicroplates = platesPerSide.some((p) => p.isMicroplate);
+
   // Flatten plates for rendering (respect count)
   const flatPlates: PlateBreakdown[] = [];
   for (const plate of platesPerSide) {
@@ -181,16 +184,21 @@ export function PlateVisualizer({
               <View style={styles.plateList}>
                 {platesPerSide.map((plate, index) => (
                   <View key={index} style={styles.plateItem}>
-                    <View
-                      style={[
-                        styles.plateDot,
-                        { backgroundColor: PLATE_COLORS[plate.weight] ?? '#888' },
-                      ]}
-                    />
+                    {plate.isMicroplate ? (
+                      <View style={[styles.microplateDot, { borderColor: PLATE_COLORS[plate.weight] ?? '#888' }]}>
+                        <View style={[styles.microplateDotInner, { backgroundColor: PLATE_COLORS[plate.weight] ?? '#888' }]} />
+                      </View>
+                    ) : (
+                      <View
+                        style={[
+                          styles.plateDot,
+                          { backgroundColor: PLATE_COLORS[plate.weight] ?? '#888' },
+                        ]}
+                      />
+                    )}
                     <ThemedText style={styles.plateText}>
                       {plate.count > 1 ? `${plate.count}×` : ''}
                       {formatWeight(plate.weight)}
-                      {plate.isMicroplate ? '*' : ''}
                     </ThemedText>
                   </View>
                 ))}
@@ -204,6 +212,20 @@ export function PlateVisualizer({
             <ThemedText style={styles.warningText}>
               Cannot achieve exact weight (off by {formatWeight(result.remainder * 2)} kg)
             </ThemedText>
+          )}
+          {hasMicroplates && (
+            <View style={styles.legendContainer}>
+              <View style={styles.legendItem}>
+                <View style={[styles.plateDot, { backgroundColor: Colors.dark.textSecondary }]} />
+                <ThemedText style={styles.legendText}>Gym</ThemedText>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.microplateDot, { borderColor: Colors.dark.textSecondary }]}>
+                  <View style={[styles.microplateDotInner, { backgroundColor: Colors.dark.textSecondary }]} />
+                </View>
+                <ThemedText style={styles.legendText}>Personal</ThemedText>
+              </View>
+            </View>
           )}
         </View>
       )}
@@ -222,6 +244,43 @@ function PlateView({ weight, isMicroplate, scaleFactor }: PlateViewProps) {
   const height = getPlateHeight(weight) * scaleFactor;
   const color = PLATE_COLORS[weight] ?? '#888888';
 
+  if (isMicroplate) {
+    // Microplates have a distinctive striped pattern
+    const stripeCount = 3;
+    const stripeHeight = height / (stripeCount * 2 + 1);
+
+    return (
+      <View
+        style={[
+          styles.plate,
+          styles.microplate,
+          {
+            width,
+            height,
+            backgroundColor: Colors.dark.surface,
+            borderColor: color,
+          },
+        ]}
+      >
+        {/* Horizontal stripes to indicate personal plate */}
+        {Array.from({ length: stripeCount }).map((_, i) => (
+          <View
+            key={i}
+            style={{
+              position: 'absolute',
+              top: stripeHeight * (i * 2 + 1),
+              left: 1,
+              right: 1,
+              height: stripeHeight,
+              backgroundColor: color,
+              borderRadius: 1,
+            }}
+          />
+        ))}
+      </View>
+    );
+  }
+
   return (
     <View
       style={[
@@ -230,8 +289,6 @@ function PlateView({ weight, isMicroplate, scaleFactor }: PlateViewProps) {
           width,
           height,
           backgroundColor: color,
-          borderColor: isMicroplate ? Colors.dark.primary : 'transparent',
-          borderWidth: isMicroplate ? 1 : 0,
         },
       ]}
     />
@@ -258,6 +315,11 @@ const styles = StyleSheet.create({
   },
   plate: {
     borderRadius: 2,
+  },
+  microplate: {
+    borderWidth: 2,
+    borderStyle: 'solid',
+    overflow: 'hidden',
   },
   collar: {
     borderRadius: 2,
@@ -312,6 +374,19 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  microplateDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  microplateDotInner: {
+    width: 2,
+    height: 2,
+    borderRadius: 1,
+  },
   plateText: {
     fontSize: 13,
     color: Colors.dark.textSecondary,
@@ -325,5 +400,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.dark.error,
     marginTop: 4,
+  },
+  legendContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.dark.border,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendText: {
+    fontSize: 11,
+    color: Colors.dark.textSecondary,
   },
 });
