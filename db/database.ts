@@ -1188,3 +1188,222 @@ export async function closeDatabase(): Promise<void> {
     db = null;
   }
 }
+
+// ============================================
+// Dashboard Statistics Operations
+// ============================================
+
+export interface DashboardStats {
+  workoutCount: number;
+  progressionCount: number;
+  totalVolume: number; // total reps * weight
+  totalReps: number;
+}
+
+/**
+ * Get dashboard statistics for a date range
+ */
+export async function getDashboardStats(
+  startDate: number,
+  endDate: number
+): Promise<DashboardStats> {
+  const database = await getDatabase();
+
+  // Get completed workout count
+  const workoutResult = await database.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM workout_sessions
+     WHERE status = 'completed' AND completed_at >= ? AND completed_at <= ?`,
+    [startDate, endDate]
+  );
+
+  // Get progression count
+  const progressionResult = await database.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM exercise_logs el
+     JOIN workout_sessions ws ON el.session_id = ws.id
+     WHERE el.progression_earned = 1
+     AND ws.status = 'completed'
+     AND ws.completed_at >= ? AND ws.completed_at <= ?`,
+    [startDate, endDate]
+  );
+
+  // Get total volume and reps
+  const volumeResult = await database.getFirstAsync<{
+    total_volume: number | null;
+    total_reps: number | null;
+  }>(
+    `SELECT
+       COALESCE(SUM(sl.completed_reps * el.total_weight), 0) as total_volume,
+       COALESCE(SUM(sl.completed_reps), 0) as total_reps
+     FROM set_logs sl
+     JOIN exercise_logs el ON sl.exercise_log_id = el.id
+     JOIN workout_sessions ws ON el.session_id = ws.id
+     WHERE sl.completed_reps IS NOT NULL
+     AND ws.status = 'completed'
+     AND ws.completed_at >= ? AND ws.completed_at <= ?`,
+    [startDate, endDate]
+  );
+
+  return {
+    workoutCount: workoutResult?.count ?? 0,
+    progressionCount: progressionResult?.count ?? 0,
+    totalVolume: Math.round(volumeResult?.total_volume ?? 0),
+    totalReps: volumeResult?.total_reps ?? 0,
+  };
+}
+
+export interface ExerciseProgressData {
+  exerciseId: string;
+  name: string;
+  dayName: string;
+  schemaName: string;
+  currentWeight: number;
+  startingWeight: number;
+  progressionCount: number;
+  weightHistory: Array<{
+    date: number;
+    weight: number;
+  }>;
+}
+
+/**
+ * Get all exercises with their progress data
+ */
+export async function getExercisesWithProgress(): Promise<ExerciseProgressData[]> {
+  const database = await getDatabase();
+
+  // Get all exercises with schema and day info
+  const exercises = await database.getAllAsync<{
+    exercise_id: string;
+    exercise_name: string;
+    current_weight: number;
+    day_name: string;
+    schema_name: string;
+  }>(
+    `SELECT
+       e.id as exercise_id,
+       e.name as exercise_name,
+       e.current_weight,
+       wd.name as day_name,
+       s.name as schema_name
+     FROM exercises e
+     JOIN workout_days wd ON e.day_id = wd.id
+     JOIN schemas s ON wd.schema_id = s.id
+     ORDER BY s.name, wd.order_index, e.order_index`
+  );
+
+  const result: ExerciseProgressData[] = [];
+
+  for (const exercise of exercises) {
+    // Get weight history for this exercise
+    const historyRows = await database.getAllAsync<{
+      completed_at: number;
+      total_weight: number;
+    }>(
+      `SELECT ws.completed_at, el.total_weight
+       FROM exercise_logs el
+       JOIN workout_sessions ws ON el.session_id = ws.id
+       WHERE el.exercise_id = ?
+       AND ws.status = 'completed'
+       AND el.status = 'completed'
+       ORDER BY ws.completed_at ASC`,
+      [exercise.exercise_id]
+    );
+
+    // Get progression count
+    const progressionResult = await database.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM exercise_logs el
+       JOIN workout_sessions ws ON el.session_id = ws.id
+       WHERE el.exercise_id = ?
+       AND el.progression_earned = 1
+       AND ws.status = 'completed'`,
+      [exercise.exercise_id]
+    );
+
+    const weightHistory = historyRows.map((row) => ({
+      date: row.completed_at,
+      weight: row.total_weight,
+    }));
+
+    const startingWeight = weightHistory.length > 0
+      ? weightHistory[0].weight
+      : exercise.current_weight;
+
+    result.push({
+      exerciseId: exercise.exercise_id,
+      name: exercise.exercise_name,
+      dayName: exercise.day_name,
+      schemaName: exercise.schema_name,
+      currentWeight: exercise.current_weight,
+      startingWeight,
+      progressionCount: progressionResult?.count ?? 0,
+      weightHistory,
+    });
+  }
+
+  return result;
+}
+
+export interface CalendarDay {
+  date: number;
+  hasWorkout: boolean;
+  isCompleted: boolean;
+  workoutCount: number;
+}
+
+/**
+ * Get workout calendar data for a month
+ */
+export async function getWorkoutCalendar(
+  year: number,
+  month: number
+): Promise<CalendarDay[]> {
+  const database = await getDatabase();
+
+  const startOfMonth = new Date(year, month - 1, 1).getTime();
+  const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999).getTime();
+
+  const sessions = await database.getAllAsync<{
+    started_at: number;
+    completed_at: number | null;
+    status: WorkoutStatus;
+  }>(
+    `SELECT started_at, completed_at, status FROM workout_sessions
+     WHERE started_at >= ? AND started_at <= ?`,
+    [startOfMonth, endOfMonth]
+  );
+
+  // Group by day
+  const dayMap = new Map<string, { hasWorkout: boolean; isCompleted: boolean; count: number }>();
+
+  for (const session of sessions) {
+    const date = new Date(session.started_at);
+    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+
+    const existing = dayMap.get(dayKey) || { hasWorkout: false, isCompleted: false, count: 0 };
+    existing.hasWorkout = true;
+    existing.count++;
+    if (session.status === 'completed') {
+      existing.isCompleted = true;
+    }
+    dayMap.set(dayKey, existing);
+  }
+
+  // Generate all days of the month
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const result: CalendarDay[] = [];
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month - 1, day);
+    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const data = dayMap.get(dayKey);
+
+    result.push({
+      date: date.getTime(),
+      hasWorkout: data?.hasWorkout ?? false,
+      isCompleted: data?.isCompleted ?? false,
+      workoutCount: data?.count ?? 0,
+    });
+  }
+
+  return result;
+}
