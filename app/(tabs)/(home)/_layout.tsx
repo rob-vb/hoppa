@@ -53,6 +53,12 @@ export default function HomeLayout() {
           title: 'Profile',
         }}
       />
+      <Stack.Screen
+        name="clients"
+        options={{
+          title: 'My Clients',
+        }}
+      />
     </Stack>
   );
 }
