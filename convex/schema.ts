@@ -35,9 +35,12 @@ export default defineSchema({
     bio: v.optional(v.string()),
     qualifications: v.optional(v.array(v.string())),
     specialties: v.optional(v.array(v.string())),
-    // Stripe Connect integration
+    // Stripe Connect integration (for receiving payments from clients)
     stripeAccountId: v.optional(v.string()),
     stripeOnboarded: v.boolean(),
+    // Stripe subscription (for paying platform fees)
+    stripeCustomerId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
     // Subscription tier for trainer platform
     subscriptionTier: v.union(
       v.literal("starter"),
@@ -55,7 +58,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_subscription_status", ["subscriptionStatus"]),
+    .index("by_subscription_status", ["subscriptionStatus"])
+    .index("by_stripe_customer", ["stripeCustomerId"]),
 
   // Trainer-Client relationships
   trainerClients: defineTable({
