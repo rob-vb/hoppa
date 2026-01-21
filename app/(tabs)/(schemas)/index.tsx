@@ -1,17 +1,20 @@
 import { useEffect } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { SchemaCard } from '@/components/ui/schema-card';
 import { useSchemaStore } from '@/stores/schema-store';
+import { usePremium, FREE_TIER_SCHEMA_LIMIT } from '@/hooks/use-premium';
 import { Colors } from '@/constants/theme';
 
 export default function SchemasScreen() {
   const router = useRouter();
   const { schemas, isLoading, error, loadSchemas } = useSchemaStore();
+  const { isPremium, canCreateSchema, schemasRemaining, showPaywall } = usePremium();
 
   useEffect(() => {
     loadSchemas();
@@ -22,10 +25,36 @@ export default function SchemasScreen() {
   };
 
   const handleCreatePress = () => {
+    if (!canCreateSchema) {
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'Schema Limit Reached',
+          `Free accounts can create up to ${FREE_TIER_SCHEMA_LIMIT} schemas. Upgrade to Premium for unlimited schemas.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Upgrade', onPress: showPaywall },
+          ]
+        );
+      }
+      return;
+    }
     router.push('/(tabs)/(schemas)/create');
   };
 
   const handleAIImportPress = () => {
+    if (!canCreateSchema) {
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'Schema Limit Reached',
+          `Free accounts can create up to ${FREE_TIER_SCHEMA_LIMIT} schemas. Upgrade to Premium for unlimited schemas.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Upgrade', onPress: showPaywall },
+          ]
+        );
+      }
+      return;
+    }
     router.push('/(tabs)/(schemas)/ai-import');
   };
 
@@ -51,6 +80,30 @@ export default function SchemasScreen() {
           <View style={styles.errorContainer}>
             <ThemedText style={styles.errorText}>{error}</ThemedText>
           </View>
+        )}
+
+        {!isPremium && schemas.length > 0 && (
+          <Card style={styles.limitBanner}>
+            <View style={styles.limitBannerContent}>
+              <View style={styles.limitBannerText}>
+                <ThemedText style={styles.limitBannerTitle}>
+                  {canCreateSchema
+                    ? `${schemasRemaining} schema${schemasRemaining === 1 ? '' : 's'} remaining`
+                    : 'Schema limit reached'}
+                </ThemedText>
+                <ThemedText style={styles.limitBannerSubtitle}>
+                  {canCreateSchema
+                    ? 'Upgrade to Premium for unlimited schemas'
+                    : 'Upgrade to create more schemas'}
+                </ThemedText>
+              </View>
+              <Button
+                title="Upgrade"
+                size="sm"
+                onPress={showPaywall}
+              />
+            </View>
+          </Card>
         )}
 
         {schemas.length === 0 ? (
@@ -131,6 +184,28 @@ const styles = StyleSheet.create({
   errorText: {
     color: Colors.dark.error,
     textAlign: 'center',
+  },
+  limitBanner: {
+    marginBottom: 16,
+  },
+  limitBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  limitBannerText: {
+    flex: 1,
+  },
+  limitBannerTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  limitBannerSubtitle: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
   },
   emptyContainer: {
     gap: 16,

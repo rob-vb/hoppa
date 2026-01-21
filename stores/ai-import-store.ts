@@ -10,6 +10,7 @@ import {
 
 // Rate limiting constants
 const FREE_TIER_MONTHLY_LIMIT = 3;
+const UNLIMITED_IMPORTS = Number.MAX_SAFE_INTEGER;
 const STORAGE_KEY_IMPORT_DATA = 'ai_import_data';
 
 interface ImportData {
@@ -49,6 +50,9 @@ interface AIImportState {
   monthlyLimit: number;
   canImport: boolean;
 
+  // Premium status
+  isPremium: boolean;
+
   // API status
   isApiConfigured: boolean;
 }
@@ -65,6 +69,9 @@ interface AIImportActions {
   // Rate limiting
   loadImportCount: () => Promise<void>;
   checkCanImport: () => boolean;
+
+  // Premium status
+  setPremiumStatus: (isPremium: boolean) => void;
 
   // API check
   checkApiConfiguration: () => void;
@@ -199,6 +206,7 @@ export const useAIImportStore = create<AIImportStore>((set, get) => ({
   importsThisMonth: 0,
   monthlyLimit: FREE_TIER_MONTHLY_LIMIT,
   canImport: true,
+  isPremium: false,
   isApiConfigured: false,
 
   // Extract schema from image
@@ -306,6 +314,7 @@ export const useAIImportStore = create<AIImportStore>((set, get) => ({
   loadImportCount: async () => {
     const data = await loadStoredImportData();
     const currentMonth = getCurrentMonthYear();
+    const { isPremium } = get();
 
     // Reset count if it's a new month
     if (data.monthYear !== currentMonth) {
@@ -318,15 +327,27 @@ export const useAIImportStore = create<AIImportStore>((set, get) => ({
     } else {
       set({
         importsThisMonth: data.count,
-        canImport: data.count < FREE_TIER_MONTHLY_LIMIT,
+        canImport: isPremium || data.count < FREE_TIER_MONTHLY_LIMIT,
       });
     }
   },
 
   // Check if user can still import
   checkCanImport: () => {
-    const { importsThisMonth, monthlyLimit } = get();
+    const { importsThisMonth, monthlyLimit, isPremium } = get();
+    // Premium users have unlimited imports
+    if (isPremium) return true;
     return importsThisMonth < monthlyLimit;
+  },
+
+  // Update premium status (called from subscription context)
+  setPremiumStatus: (isPremium: boolean) => {
+    const { importsThisMonth } = get();
+    set({
+      isPremium,
+      monthlyLimit: isPremium ? UNLIMITED_IMPORTS : FREE_TIER_MONTHLY_LIMIT,
+      canImport: isPremium || importsThisMonth < FREE_TIER_MONTHLY_LIMIT,
+    });
   },
 
   // Check API configuration

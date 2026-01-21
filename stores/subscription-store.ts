@@ -27,6 +27,7 @@ interface SubscriptionActions {
   setError: (error: string | null) => void;
   clearError: () => void;
   reset: () => void;
+  setupCustomerInfoListener: () => () => void;
 }
 
 type SubscriptionStore = SubscriptionState & SubscriptionActions;
@@ -209,4 +210,24 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
   clearError: () => set({ error: null }),
 
   reset: () => set(initialState),
+
+  // Setup listener for customer info updates (subscription changes, renewals, expirations)
+  setupCustomerInfoListener: () => {
+    const listener = Purchases.addCustomerInfoUpdateListener((customerInfo) => {
+      const isPremium =
+        typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== 'undefined';
+      const currentPlan = determinePlan(customerInfo);
+
+      set({
+        customerInfo,
+        isPremium,
+        currentPlan,
+      });
+    });
+
+    // Return cleanup function
+    return () => {
+      listener.remove();
+    };
+  },
 }));

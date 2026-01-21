@@ -1,6 +1,10 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { useSubscription } from '@/contexts/subscription-context';
+import { useSchemaStore } from '@/stores/schema-store';
+
+// Free tier limits
+export const FREE_TIER_SCHEMA_LIMIT = 3;
 
 /**
  * Simple hook to check if the user has premium access.
@@ -22,10 +26,23 @@ import { useSubscription } from '@/contexts/subscription-context';
 export function usePremium() {
   const router = useRouter();
   const { isPremium, currentPlan, isLoading, offerings } = useSubscription();
+  const { schemas } = useSchemaStore();
 
   const showPaywall = useCallback(() => {
     router.push('/paywall');
   }, [router]);
+
+  // Calculate schema limit info
+  const schemaCount = schemas.length;
+  const canCreateSchema = useMemo(() => {
+    if (isPremium) return true;
+    return schemaCount < FREE_TIER_SCHEMA_LIMIT;
+  }, [isPremium, schemaCount]);
+
+  const schemasRemaining = useMemo(() => {
+    if (isPremium) return Infinity;
+    return Math.max(0, FREE_TIER_SCHEMA_LIMIT - schemaCount);
+  }, [isPremium, schemaCount]);
 
   return {
     isPremium,
@@ -33,5 +50,10 @@ export function usePremium() {
     isLoading,
     hasOfferings: offerings !== null,
     showPaywall,
+    // Schema limits
+    canCreateSchema,
+    schemaCount,
+    schemaLimit: isPremium ? Infinity : FREE_TIER_SCHEMA_LIMIT,
+    schemasRemaining,
   };
 }

@@ -99,38 +99,38 @@
 - [x] Implement Apple Sign-In
 - [x] Build auth store (Zustand)
 - [x] Update existing auth screens to use Convex Auth
-- [ ] Add account management (profile, logout)
-- [ ] Handle auth state persistence
+- [x] Add account management (profile, logout)
+- [x] Handle auth state persistence
 
 #### Sync Engine (1.5 weeks)
-- [ ] Build sync engine utility (`utils/sync-engine.ts`)
-- [ ] Implement initial sync (upload local SQLite to Convex)
-- [ ] Implement real-time sync via Convex subscriptions
-- [ ] Handle conflict resolution (last-write-wins with timestamps)
-- [ ] Implement offline queue for mutations
-- [ ] Sync when coming back online
-- [ ] Add localId fields for SQLite ↔ Convex mapping
+- [x] Build sync engine utility (`utils/sync-engine.ts`)
+- [x] Implement initial sync (upload local SQLite to Convex)
+- [x] Implement real-time sync via Convex subscriptions
+- [x] Handle conflict resolution (last-write-wins with timestamps)
+- [x] Implement offline queue for mutations
+- [x] Sync when coming back online
+- [x] Add localId fields for SQLite ↔ Convex mapping
 
 #### Progress Dashboard (2 weeks)
-- [ ] Build dashboard tab `(tabs)/dashboard.tsx` (replace placeholder)
-- [ ] Create overview cards (workouts, progressions, volume)
-- [ ] Build exercise selector with search
-- [ ] Create exercise progress chart (weight over time)
-- [ ] Show starting weight → current weight comparison
-- [ ] Display progression count and average time between
-- [ ] Build workout calendar view
-- [ ] Implement Convex queries for progress data
-- [ ] Add date range filters (last month, 3 months, 6 months, year)
+- [x] Build dashboard tab `(tabs)/dashboard.tsx` (replace placeholder)
+- [x] Create overview cards (workouts, progressions, volume)
+- [x] Build exercise selector with search
+- [x] Create exercise progress chart (weight over time)
+- [x] Show starting weight → current weight comparison
+- [x] Display progression count and average time between
+- [x] Build workout calendar view
+- [x] Implement Convex queries for progress data
+- [x] Add date range filters (last month, 3 months, 6 months, year)
 
 #### Subscription (1 week)
-- [ ] Integrate RevenueCat SDK
-- [ ] Build paywall UI
-- [ ] Implement monthly subscription (€4.99)
-- [ ] Implement annual subscription (€39.99)
-- [ ] Handle purchase flow (App Store / Google Play)
-- [ ] Update isPremium flag in Convex on purchase
-- [ ] Gate premium features behind subscription check
-- [ ] Handle subscription expiration/renewal
+- [x] Integrate RevenueCat SDK
+- [x] Build paywall UI
+- [x] Implement monthly subscription (€4.99)
+- [x] Implement annual subscription (€39.99)
+- [x] Handle purchase flow (App Store / Google Play)
+- [x] Update isPremium flag in Convex on purchase
+- [x] Gate premium features behind subscription check
+- [x] Handle subscription expiration/renewal
 
 #### Testing & Polish (1 week)
 - [ ] Test offline scenarios

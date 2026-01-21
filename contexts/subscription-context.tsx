@@ -11,6 +11,7 @@ import {
   useSubscriptionStore,
   type SubscriptionPlan,
 } from '@/stores/subscription-store';
+import { useAIImportStore } from '@/stores/ai-import-store';
 import { useAuth } from '@/contexts/auth-context';
 import type { PurchasesPackage, PurchasesOffering } from 'react-native-purchases';
 
@@ -47,6 +48,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
     restorePurchases: storeRestorePurchases,
     clearError,
     reset,
+    setupCustomerInfoListener,
   } = useSubscriptionStore();
 
   // Convex subscription status (server-side truth)
@@ -56,6 +58,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   );
 
   const updateSubscriptionMutation = useMutation(api.subscriptions.updateSubscription);
+  const clearSubscriptionMutation = useMutation(api.subscriptions.clearSubscription);
 
   // Initialize RevenueCat when user is authenticated
   useEffect(() => {
@@ -63,6 +66,14 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
       initialize(user._id);
     }
   }, [isAuthenticated, user?._id, isInitialized, initialize]);
+
+  // Setup customer info listener for subscription changes (renewals, expirations)
+  useEffect(() => {
+    if (isInitialized && isAuthenticated) {
+      const cleanup = setupCustomerInfoListener();
+      return cleanup;
+    }
+  }, [isInitialized, isAuthenticated, setupCustomerInfoListener]);
 
   // Reset subscription state on logout
   useEffect(() => {
@@ -77,6 +88,36 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
       checkSubscriptionStatus();
     }
   }, [serverSubscription, isPremium, checkSubscriptionStatus]);
+
+  // Sync local subscription changes to Convex backend (handles renewals/expirations)
+  useEffect(() => {
+    if (!isAuthenticated || !isInitialized) return;
+
+    const { customerInfo } = useSubscriptionStore.getState();
+    if (!customerInfo) return;
+
+    const expirationDate =
+      customerInfo.entitlements.active['premium']?.expirationDate;
+
+    // Sync to Convex backend
+    if (isPremium) {
+      updateSubscriptionMutation({
+        isPremium: true,
+        subscriptionPlan: currentPlan,
+        subscriptionExpiresAt: expirationDate
+          ? new Date(expirationDate).getTime()
+          : undefined,
+      }).catch(console.error);
+    } else if (serverSubscription?.isPremium) {
+      // User was premium but subscription expired
+      clearSubscriptionMutation().catch(console.error);
+    }
+  }, [isPremium, currentPlan, isAuthenticated, isInitialized, serverSubscription?.isPremium, updateSubscriptionMutation, clearSubscriptionMutation]);
+
+  // Sync premium status with AI import store for rate limiting
+  useEffect(() => {
+    useAIImportStore.getState().setPremiumStatus(isPremium);
+  }, [isPremium]);
 
   const purchasePackage = useCallback(
     async (pkg: PurchasesPackage): Promise<boolean> => {
