@@ -7,11 +7,13 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
+import { usePremium } from '@/hooks/use-premium';
 import { Colors } from '@/constants/theme';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { isPremium, currentPlan, showPaywall } = usePremium();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
@@ -89,6 +91,42 @@ export default function ProfileScreen() {
               <ThemedText style={styles.profileEmail}>{user.email}</ThemedText>
             )}
           </View>
+        </View>
+
+        {/* Subscription Section */}
+        <View style={styles.section}>
+          <ThemedText style={styles.sectionTitle}>Subscription</ThemedText>
+          {isPremium ? (
+            <View style={styles.card}>
+              <View style={styles.premiumRow}>
+                <View style={styles.premiumBadge}>
+                  <ThemedText style={styles.premiumBadgeText}>PRO</ThemedText>
+                </View>
+                <View style={styles.premiumInfo}>
+                  <ThemedText style={styles.premiumTitle}>Premium Active</ThemedText>
+                  <ThemedText style={styles.premiumPlan}>
+                    {currentPlan === 'annual' ? 'Annual Plan' : 'Monthly Plan'}
+                  </ThemedText>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <Pressable
+              onPress={showPaywall}
+              style={({ pressed }) => [
+                styles.upgradeCard,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.upgradeContent}>
+                <ThemedText style={styles.upgradeTitle}>Upgrade to Premium</ThemedText>
+                <ThemedText style={styles.upgradeDescription}>
+                  Unlock unlimited schemas, AI import, and more
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.upgradeArrow}>→</ThemedText>
+            </Pressable>
+          )}
         </View>
 
         {/* Account Section */}
@@ -230,5 +268,61 @@ const styles = StyleSheet.create({
   },
   logoutSection: {
     marginTop: 8,
+  },
+  premiumRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  premiumBadge: {
+    backgroundColor: Colors.dark.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  premiumBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  premiumInfo: {
+    flex: 1,
+  },
+  premiumTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  premiumPlan: {
+    fontSize: 14,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  upgradeCard: {
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.dark.primary + '40',
+  },
+  upgradeContent: {
+    flex: 1,
+  },
+  upgradeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.dark.primary,
+  },
+  upgradeDescription: {
+    fontSize: 14,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  upgradeArrow: {
+    fontSize: 20,
+    color: Colors.dark.primary,
+    marginLeft: 12,
   },
 });

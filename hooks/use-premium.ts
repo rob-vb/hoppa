@@ -1,3 +1,5 @@
+import { useCallback } from 'react';
+import { useRouter } from 'expo-router';
 import { useSubscription } from '@/contexts/subscription-context';
 
 /**
@@ -18,12 +20,18 @@ import { useSubscription } from '@/contexts/subscription-context';
  * ```
  */
 export function usePremium() {
+  const router = useRouter();
   const { isPremium, currentPlan, isLoading, offerings } = useSubscription();
+
+  const showPaywall = useCallback(() => {
+    router.push('/paywall');
+  }, [router]);
 
   return {
     isPremium,
     currentPlan,
     isLoading,
     hasOfferings: offerings !== null,
+    showPaywall,
   };
 }
