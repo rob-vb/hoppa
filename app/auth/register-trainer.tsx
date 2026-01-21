@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { ThemedText } from '@/components/themed-text';
@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/auth-context';
 
 export default function RegisterTrainerScreen() {
   const { signUpAsTrainer, signInWithGoogle, signInWithApple } = useAuth();
+  const router = useRouter();
   const [name, setName] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [email, setEmail] = useState('');
@@ -28,9 +29,19 @@ export default function RegisterTrainerScreen() {
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const [isAppleSubmitting, setIsAppleSubmitting] = useState(false);
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSignUp = async () => {
     if (!name || !email || !password || !confirmPassword) {
       setError('Please fill in all required fields');
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setError('Please enter a valid email address');
       return;
     }
 
@@ -70,7 +81,8 @@ export default function RegisterTrainerScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signInWithGoogle();
-      // Note: After Google sign in, user needs to complete trainer registration
+      // After OAuth sign in, navigate to complete trainer profile
+      router.replace('/auth/complete-trainer-profile');
     } catch {
       setError('Failed to sign in with Google');
       if (Platform.OS === 'ios') {
@@ -89,7 +101,8 @@ export default function RegisterTrainerScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signInWithApple();
-      // Note: After Apple sign in, user needs to complete trainer registration
+      // After OAuth sign in, navigate to complete trainer profile
+      router.replace('/auth/complete-trainer-profile');
     } catch {
       setError('Failed to sign in with Apple');
       if (Platform.OS === 'ios') {

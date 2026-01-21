@@ -118,6 +118,23 @@ export default function LandingScreen() {
           </Link>
         </View>
 
+        {/* Trainer Section */}
+        <View style={styles.trainerSection}>
+          <ThemedText style={styles.trainerTitle}>
+            Are you a fitness trainer?
+          </ThemedText>
+          <ThemedText style={styles.trainerDescription}>
+            Manage clients, assign workouts, and track their progress
+          </ThemedText>
+          <Link href="/auth/register-trainer" asChild>
+            <Button
+              title="Register as Trainer"
+              variant="ghost"
+              size="md"
+            />
+          </Link>
+        </View>
+
         {/* Footer */}
         <View style={styles.footer}>
           <ThemedText style={styles.footerText}>
@@ -215,6 +232,26 @@ const styles = StyleSheet.create({
   ctaSection: {
     gap: 12,
     marginBottom: 32,
+  },
+  trainerSection: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    backgroundColor: '#2C2C2E',
+    borderRadius: 16,
+    marginBottom: 32,
+    gap: 8,
+  },
+  trainerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  trainerDescription: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 8,
   },
   footer: {
     alignItems: 'center',
