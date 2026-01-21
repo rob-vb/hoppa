@@ -187,6 +187,17 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </Link>
           </View>
+
+          <View style={styles.footer}>
+            <ThemedText style={styles.footerText}>
+              Are you a trainer?{' '}
+            </ThemedText>
+            <Link href="/auth/register-trainer" asChild>
+              <TouchableOpacity>
+                <ThemedText style={styles.linkText}>Create trainer account</ThemedText>
+              </TouchableOpacity>
+            </Link>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </ThemedView>

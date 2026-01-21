@@ -14,6 +14,10 @@ export default defineSchema({
     phone: v.optional(v.string()),
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
+    // User type - client (default) or trainer
+    userType: v.optional(
+      v.union(v.literal("client"), v.literal("trainer"))
+    ),
     // Subscription fields
     isPremium: v.optional(v.boolean()),
     subscriptionPlan: v.optional(
@@ -21,7 +25,102 @@ export default defineSchema({
     ),
     subscriptionExpiresAt: v.optional(v.number()),
   })
-    .index("email", ["email"]),
+    .index("email", ["email"])
+    .index("by_user_type", ["userType"]),
+
+  // Personal Trainers - extended profile for trainers
+  trainers: defineTable({
+    userId: v.id("users"),
+    businessName: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    qualifications: v.optional(v.array(v.string())),
+    specialties: v.optional(v.array(v.string())),
+    // Stripe Connect integration
+    stripeAccountId: v.optional(v.string()),
+    stripeOnboarded: v.boolean(),
+    // Subscription tier for trainer platform
+    subscriptionTier: v.union(
+      v.literal("starter"),
+      v.literal("pro"),
+      v.literal("studio")
+    ),
+    subscriptionStatus: v.union(
+      v.literal("active"),
+      v.literal("past_due"),
+      v.literal("canceled"),
+      v.literal("trialing")
+    ),
+    maxClients: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_subscription_status", ["subscriptionStatus"]),
+
+  // Trainer-Client relationships
+  trainerClients: defineTable({
+    trainerId: v.id("trainers"),
+    clientId: v.optional(v.id("users")), // Null until client accepts invite
+    clientEmail: v.string(),
+    status: v.union(
+      v.literal("invited"),
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("archived")
+    ),
+    inviteToken: v.optional(v.string()),
+    invitedAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+    // Billing configuration
+    billingType: v.optional(
+      v.union(
+        v.literal("monthly"),
+        v.literal("per_session"),
+        v.literal("package"),
+        v.literal("external")
+      )
+    ),
+    billingAmount: v.optional(v.number()),
+    notes: v.optional(v.string()),
+  })
+    .index("by_trainer", ["trainerId"])
+    .index("by_client", ["clientId"])
+    .index("by_invite_token", ["inviteToken"])
+    .index("by_trainer_status", ["trainerId", "status"]),
+
+  // Schema assignments (trainer assigns schema to client)
+  schemaAssignments: defineTable({
+    schemaId: v.id("schemas"),
+    trainerId: v.id("trainers"),
+    clientId: v.id("users"),
+    assignedAt: v.number(),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    status: v.union(
+      v.literal("active"),
+      v.literal("completed"),
+      v.literal("replaced")
+    ),
+    notes: v.optional(v.string()),
+  })
+    .index("by_client", ["clientId"])
+    .index("by_trainer", ["trainerId"])
+    .index("by_schema", ["schemaId"])
+    .index("by_client_status", ["clientId", "status"]),
+
+  // Schema templates (trainer's reusable schemas)
+  schemaTemplates: defineTable({
+    trainerId: v.id("trainers"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    category: v.optional(v.string()),
+    schemaData: v.any(), // Full schema structure as JSON
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    usageCount: v.number(),
+  })
+    .index("by_trainer", ["trainerId"])
+    .index("by_trainer_category", ["trainerId", "category"]),
 
   // Schema - workout template
   schemas: defineTable({

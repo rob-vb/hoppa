@@ -16,9 +16,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/contexts/auth-context';
 
-export default function RegisterScreen() {
-  const { signUp, signInWithGoogle, signInWithApple } = useAuth();
+export default function RegisterTrainerScreen() {
+  const { signUpAsTrainer, signInWithGoogle, signInWithApple } = useAuth();
   const [name, setName] = useState('');
+  const [businessName, setBusinessName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,7 +29,7 @@ export default function RegisterScreen() {
   const [isAppleSubmitting, setIsAppleSubmitting] = useState(false);
 
   const handleSignUp = async () => {
-    if (!email || !password || !confirmPassword) {
+    if (!name || !email || !password || !confirmPassword) {
       setError('Please fill in all required fields');
       return;
     }
@@ -49,10 +50,10 @@ export default function RegisterScreen() {
       if (Platform.OS === 'ios') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      await signUp(email, password, name || undefined);
+      await signUpAsTrainer(email, password, name, businessName || undefined);
       // Navigation is handled automatically by the auth state change in _layout.tsx
     } catch {
-      setError('Failed to create account. Please try again.');
+      setError('Failed to create trainer account. Please try again.');
       if (Platform.OS === 'ios') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
@@ -69,6 +70,7 @@ export default function RegisterScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signInWithGoogle();
+      // Note: After Google sign in, user needs to complete trainer registration
     } catch {
       setError('Failed to sign in with Google');
       if (Platform.OS === 'ios') {
@@ -87,6 +89,7 @@ export default function RegisterScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signInWithApple();
+      // Note: After Apple sign in, user needs to complete trainer registration
     } catch {
       setError('Failed to sign in with Apple');
       if (Platform.OS === 'ios') {
@@ -109,10 +112,10 @@ export default function RegisterScreen() {
         >
           <View style={styles.header}>
             <ThemedText type="title" style={styles.title}>
-              Create Account
+              Become a Trainer
             </ThemedText>
             <ThemedText style={styles.subtitle}>
-              Start tracking your workouts today
+              Create your trainer account and start managing clients
             </ThemedText>
           </View>
 
@@ -124,10 +127,10 @@ export default function RegisterScreen() {
             )}
 
             <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Name (optional)</ThemedText>
+              <ThemedText style={styles.label}>Your Name *</ThemedText>
               <TextInput
                 style={styles.input}
-                placeholder="Enter your name"
+                placeholder="Enter your full name"
                 placeholderTextColor="#6B7280"
                 value={name}
                 onChangeText={setName}
@@ -138,7 +141,20 @@ export default function RegisterScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Email</ThemedText>
+              <ThemedText style={styles.label}>Business Name (optional)</ThemedText>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., FitCoach Training"
+                placeholderTextColor="#6B7280"
+                value={businessName}
+                onChangeText={setBusinessName}
+                autoCapitalize="words"
+                editable={!isSubmitting}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <ThemedText style={styles.label}>Email *</ThemedText>
               <TextInput
                 style={styles.input}
                 placeholder="Enter your email"
@@ -153,10 +169,10 @@ export default function RegisterScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Password</ThemedText>
+              <ThemedText style={styles.label}>Password *</ThemedText>
               <TextInput
                 style={styles.input}
-                placeholder="Create a password"
+                placeholder="Create a password (min 8 characters)"
                 placeholderTextColor="#6B7280"
                 value={password}
                 onChangeText={setPassword}
@@ -167,7 +183,7 @@ export default function RegisterScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <ThemedText style={styles.label}>Confirm Password</ThemedText>
+              <ThemedText style={styles.label}>Confirm Password *</ThemedText>
               <TextInput
                 style={styles.input}
                 placeholder="Confirm your password"
@@ -180,6 +196,13 @@ export default function RegisterScreen() {
               />
             </View>
 
+            <View style={styles.tierInfo}>
+              <ThemedText style={styles.tierTitle}>Starter Plan (Free)</ThemedText>
+              <ThemedText style={styles.tierDescription}>
+                Manage up to 3 clients, basic features included
+              </ThemedText>
+            </View>
+
             <TouchableOpacity
               style={[styles.button, isSubmitting && styles.buttonDisabled]}
               onPress={handleSignUp}
@@ -188,7 +211,7 @@ export default function RegisterScreen() {
               {isSubmitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <ThemedText style={styles.buttonText}>Create Account</ThemedText>
+                <ThemedText style={styles.buttonText}>Create Trainer Account</ThemedText>
               )}
             </TouchableOpacity>
 
@@ -235,11 +258,11 @@ export default function RegisterScreen() {
 
             <View style={styles.footer}>
               <ThemedText style={styles.footerText}>
-                Are you a trainer?{' '}
+                Not a trainer?{' '}
               </ThemedText>
-              <Link href="/auth/register-trainer" asChild>
+              <Link href="/auth/register" asChild>
                 <TouchableOpacity>
-                  <ThemedText style={styles.linkText}>Create trainer account</ThemedText>
+                  <ThemedText style={styles.linkText}>Sign up as an athlete</ThemedText>
                 </TouchableOpacity>
               </Link>
             </View>
@@ -303,6 +326,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#374151',
   },
+  tierInfo: {
+    backgroundColor: '#1F2937',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  tierTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3B82F6',
+    marginBottom: 4,
+  },
+  tierDescription: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
   button: {
     backgroundColor: '#3B82F6',
     borderRadius: 12,
@@ -358,7 +398,7 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 16,
+    marginTop: 8,
   },
   footerText: {
     color: '#9CA3AF',

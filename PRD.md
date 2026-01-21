@@ -137,17 +137,17 @@
 - [x] Test sync edge cases
 - [x] Test subscription flows
 - [x] Performance optimization
-- [ ] Bug fixes
+- [x] Bug fixes
 
 ---
 
 ### Phase 3: Personal Trainer Platform - ~12 weeks
 
 #### Web App Setup (1 week)
-- [ ] Create Next.js 14 project (App Router)
-- [ ] Set up Tailwind CSS
-- [ ] Configure Convex for web
-- [ ] Implement trainer authentication
+- [x] Create Next.js 14 project (App Router)
+- [x] Set up Tailwind CSS
+- [x] Configure Convex for web
+- [x] Implement trainer authentication
 - [ ] Build basic layout (sidebar, header)
 - [ ] Create landing page
 

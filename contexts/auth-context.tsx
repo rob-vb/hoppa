@@ -1,20 +1,24 @@
 import React, { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useQuery, useConvexAuth } from "convex/react";
+import { useQuery, useConvexAuth, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useAuthStore, type User } from '@/stores/auth-store';
+import { useAuthStore, type User, type TrainerProfile } from '@/stores/auth-store';
 
 interface AuthContextValue {
   user: User | null;
+  trainerProfile: TrainerProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isTrainer: boolean;
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
+  signUpAsTrainer: (email: string, password: string, name: string, businessName?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
+  registerAsTrainer: (businessName?: string, bio?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -33,8 +37,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isConvexAuthenticated ? undefined : "skip"
   );
 
-  const { user, isLoading, isAuthenticated, error, setUser, setLoading, setError, clearError, reset } =
-    useAuthStore();
+  // Fetch trainer profile if user is a trainer
+  const convexTrainerProfile = useQuery(
+    api.trainers.currentTrainer,
+    isConvexAuthenticated ? undefined : "skip"
+  );
+
+  // Mutation to register as trainer
+  const registerTrainerMutation = useMutation(api.trainers.register);
+
+  const {
+    user,
+    trainerProfile,
+    isLoading,
+    isAuthenticated,
+    isTrainer,
+    error,
+    setUser,
+    setTrainerProfile,
+    setLoading,
+    setError,
+    clearError,
+    reset
+  } = useAuthStore();
 
   // Sync Convex auth state with Zustand store
   useEffect(() => {
@@ -47,6 +72,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // If not authenticated, clear user and exit loading
     if (!isConvexAuthenticated) {
       setUser(null);
+      setTrainerProfile(null);
       return;
     }
 
@@ -59,7 +85,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // User data loaded
     setUser(convexUser);
-  }, [isConvexLoading, isConvexAuthenticated, convexUser, setUser, setLoading]);
+  }, [isConvexLoading, isConvexAuthenticated, convexUser, setUser, setTrainerProfile, setLoading]);
+
+  // Sync trainer profile when user is a trainer
+  useEffect(() => {
+    if (convexTrainerProfile !== undefined) {
+      setTrainerProfile(convexTrainerProfile);
+    }
+  }, [convexTrainerProfile, setTrainerProfile]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -119,19 +152,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  // Sign up as a trainer - creates user and registers as trainer
+  const signUpAsTrainer = async (email: string, password: string, name: string, businessName?: string) => {
+    try {
+      clearError();
+      // First, sign up the user
+      await convexSignIn("password", { email, password, name, flow: "signUp" });
+      // The trainer registration will be called after the user is created
+      // via the registerAsTrainer function once authenticated
+      // Store business name for later use if needed
+      if (businessName) {
+        // We'll register as trainer once the auth state is synced
+        // This is handled by calling registerAsTrainer after signUp completes
+        await registerTrainerMutation({ businessName });
+      } else {
+        await registerTrainerMutation({});
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign up as trainer');
+      throw err;
+    }
+  };
+
+  // Register an existing authenticated user as a trainer
+  const registerAsTrainer = async (businessName?: string, bio?: string) => {
+    try {
+      clearError();
+      await registerTrainerMutation({ businessName, bio });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to register as trainer');
+      throw err;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        trainerProfile,
         isLoading,
         isAuthenticated,
+        isTrainer,
         error,
         signIn,
         signUp,
+        signUpAsTrainer,
         signInWithGoogle,
         signInWithApple,
         signOut,
         clearError,
+        registerAsTrainer,
       }}
     >
       {children}
