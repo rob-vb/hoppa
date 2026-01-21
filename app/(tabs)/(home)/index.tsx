@@ -1,7 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, View, ListRenderItem } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Pressable, StyleSheet, View, ListRenderItem } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQuery } from 'convex/react';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import * as Haptics from 'expo-haptics';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -11,6 +14,7 @@ import { useSchemaStore } from '@/stores/schema-store';
 import { useWorkoutStore } from '@/stores/workout-store';
 import { Colors } from '@/constants/theme';
 import { SchemaWithDays, WorkoutDayWithExercises, WorkoutSession } from '@/db/types';
+import { api } from '@/convex/_generated/api';
 import * as db from '@/db/database';
 
 interface WorkoutDayWithSchema {
@@ -26,6 +30,11 @@ export default function HomeScreen() {
   const startWorkout = useWorkoutStore((state) => state.startWorkout);
   const resumeWorkout = useWorkoutStore((state) => state.resumeWorkout);
   const session = useWorkoutStore((state) => state.session);
+
+  // Trainer queries
+  const trainer = useQuery(api.trainers.currentTrainer);
+  const clientCount = useQuery(api.trainers.getClientCount);
+  const clients = useQuery(api.trainers.getClientsWithActivity, {});
 
   const [workoutDays, setWorkoutDays] = useState<WorkoutDayWithSchema[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,6 +111,37 @@ export default function HomeScreen() {
     router.push('/(tabs)/(schemas)/create');
   }, [router]);
 
+  const handleManageClients = useCallback(() => {
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    router.push('/(tabs)/(home)/clients');
+  }, [router]);
+
+  // Calculate client activity stats
+  const clientStats = useMemo(() => {
+    if (!clients) return null;
+
+    const activeClients = clients.filter(c => c.status === 'active');
+    const needsAttention = activeClients.filter(c => {
+      if (!c.lastWorkout) return true;
+      const daysSinceWorkout = Math.floor((Date.now() - c.lastWorkout) / (24 * 60 * 60 * 1000));
+      return daysSinceWorkout > 7;
+    });
+    const recentlyActive = activeClients.filter(c => {
+      if (!c.lastWorkout) return false;
+      const daysSinceWorkout = Math.floor((Date.now() - c.lastWorkout) / (24 * 60 * 60 * 1000));
+      return daysSinceWorkout <= 3;
+    });
+
+    return {
+      total: activeClients.length,
+      pending: clients.filter(c => c.status === 'invited').length,
+      needsAttention: needsAttention.length,
+      recentlyActive: recentlyActive.length,
+    };
+  }, [clients]);
+
   const keyExtractor = useCallback(
     (item: WorkoutDayWithSchema) => `${item.schema.id}-${item.day.id}`,
     []
@@ -144,12 +184,62 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {trainer && clientStats && (
+          <Pressable
+            onPress={handleManageClients}
+            style={({ pressed }) => [
+              styles.clientsCard,
+              pressed && styles.clientsCardPressed,
+            ]}
+          >
+            <View style={styles.clientsCardHeader}>
+              <View style={styles.clientsCardIcon}>
+                <MaterialIcons name="people" size={20} color={Colors.dark.primary} />
+              </View>
+              <View style={styles.clientsCardTitleContainer}>
+                <ThemedText style={styles.clientsCardTitle}>My Clients</ThemedText>
+                <ThemedText style={styles.clientsCardSubtitle}>
+                  {clientStats.total} active · {clientCount?.maxClients ?? 0} max
+                </ThemedText>
+              </View>
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={Colors.dark.textSecondary}
+              />
+            </View>
+            <View style={styles.clientsCardStats}>
+              <View style={styles.clientStatItem}>
+                <View style={[styles.clientStatDot, { backgroundColor: '#10B981' }]} />
+                <ThemedText style={styles.clientStatValue}>{clientStats.recentlyActive}</ThemedText>
+                <ThemedText style={styles.clientStatLabel}>active</ThemedText>
+              </View>
+              <View style={styles.clientStatDivider} />
+              <View style={styles.clientStatItem}>
+                <View style={[styles.clientStatDot, { backgroundColor: '#F59E0B' }]} />
+                <ThemedText style={styles.clientStatValue}>{clientStats.pending}</ThemedText>
+                <ThemedText style={styles.clientStatLabel}>pending</ThemedText>
+              </View>
+              {clientStats.needsAttention > 0 && (
+                <>
+                  <View style={styles.clientStatDivider} />
+                  <View style={styles.clientStatItem}>
+                    <View style={[styles.clientStatDot, { backgroundColor: '#EF4444' }]} />
+                    <ThemedText style={styles.clientStatValue}>{clientStats.needsAttention}</ThemedText>
+                    <ThemedText style={styles.clientStatLabel}>inactive</ThemedText>
+                  </View>
+                </>
+              )}
+            </View>
+          </Pressable>
+        )}
+
         {workoutDays.length > 0 && (
           <ThemedText style={styles.sectionTitle}>Your Workouts</ThemedText>
         )}
       </>
     ),
-    [error, session, handleResumeWorkout, workoutDays.length]
+    [error, session, handleResumeWorkout, trainer, clientStats, clientCount, handleManageClients, workoutDays.length]
   );
 
   const ListEmptyComponent = useMemo(
@@ -283,5 +373,73 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 4,
+  },
+  clientsCard: {
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  clientsCardPressed: {
+    opacity: 0.7,
+  },
+  clientsCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  clientsCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.dark.primary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  clientsCardTitleContainer: {
+    flex: 1,
+  },
+  clientsCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  clientsCardSubtitle: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  clientsCardStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+  },
+  clientStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  clientStatDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  clientStatValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  clientStatLabel: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+  },
+  clientStatDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: Colors.dark.border,
+    marginHorizontal: 16,
   },
 });

@@ -40,7 +40,7 @@ export default function ClientsScreen() {
 
   const trainer = useQuery(api.trainers.currentTrainer);
   const clientCount = useQuery(api.trainers.getClientCount);
-  const clients = useQuery(api.trainers.getClients, {});
+  const clients = useQuery(api.trainers.getClientsWithActivity, {});
 
   const sendInvitation = useAction(api.clientInvitations.sendInvitation);
   const resendInvitation = useAction(api.clientInvitations.resendInvitation);
@@ -274,6 +274,9 @@ export default function ClientsScreen() {
               status={item.status}
               invitedAt={item.invitedAt}
               acceptedAt={item.acceptedAt}
+              lastWorkout={item.lastWorkout}
+              totalWorkouts={item.totalWorkouts}
+              workoutsThisWeek={item.workoutsThisWeek}
               onPress={() => handleClientPress(item)}
               onResendInvite={
                 item.status === 'invited'

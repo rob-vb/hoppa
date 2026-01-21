@@ -305,3 +305,92 @@ export const isTrainer = query({
     return user?.userType === "trainer";
   },
 });
+
+// Get trainer's clients with workout activity stats
+export const getClientsWithActivity = query({
+  args: {
+    status: v.optional(
+      v.union(
+        v.literal("invited"),
+        v.literal("active"),
+        v.literal("paused"),
+        v.literal("archived")
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      return [];
+    }
+
+    const trainer = await ctx.db
+      .query("trainers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+
+    if (!trainer) {
+      return [];
+    }
+
+    const clients = await ctx.db
+      .query("trainerClients")
+      .withIndex("by_trainer", (q) => q.eq("trainerId", trainer._id))
+      .collect();
+
+    // Filter by status if provided
+    const filteredClients = args.status
+      ? clients.filter((c) => c.status === args.status)
+      : clients;
+
+    // Fetch user details and workout activity for each client
+    const clientsWithActivity = await Promise.all(
+      filteredClients.map(async (client) => {
+        let userDetails = null;
+        let lastWorkout: number | null = null;
+        let totalWorkouts = 0;
+        let workoutsThisWeek = 0;
+
+        if (client.clientId) {
+          userDetails = await ctx.db.get(client.clientId);
+
+          // Get workout sessions for this client
+          const sessions = await ctx.db
+            .query("workoutSessions")
+            .withIndex("by_user", (q) => q.eq("userId", client.clientId!))
+            .collect();
+
+          const completedSessions = sessions.filter(
+            (s) => s.status === "completed" && s.completedAt
+          );
+
+          totalWorkouts = completedSessions.length;
+
+          // Find most recent workout
+          if (completedSessions.length > 0) {
+            const sorted = completedSessions.sort(
+              (a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0)
+            );
+            lastWorkout = sorted[0].completedAt ?? null;
+          }
+
+          // Count workouts this week
+          const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+          workoutsThisWeek = completedSessions.filter(
+            (s) => s.completedAt && s.completedAt >= oneWeekAgo
+          ).length;
+        }
+
+        return {
+          ...client,
+          user: userDetails,
+          lastWorkout,
+          totalWorkouts,
+          workoutsThisWeek,
+        };
+      })
+    );
+
+    return clientsWithActivity;
+  },
+});
