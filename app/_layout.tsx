@@ -21,10 +21,12 @@ function RootLayoutNav() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === 'auth';
+    const firstSegment = segments[0] as string | undefined;
+    const isLandingPage = !firstSegment || firstSegment === 'index';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/auth/login');
-    } else if (isAuthenticated && inAuthGroup) {
+    if (!isAuthenticated && !inAuthGroup && !isLandingPage) {
+      router.replace('/');
+    } else if (isAuthenticated && (inAuthGroup || isLandingPage)) {
       router.replace('/(tabs)/(home)');
     }
   }, [isAuthenticated, segments, isLoading, router]);
@@ -39,6 +41,7 @@ function RootLayoutNav() {
 
   return (
     <Stack>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false }} />
       <Stack.Screen name="workout" options={{ headerShown: false }} />
