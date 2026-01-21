@@ -58,6 +58,10 @@ export default function SchemasScreen() {
     router.push('/(tabs)/(schemas)/ai-import');
   };
 
+  const handleLibraryPress = () => {
+    router.push('/(tabs)/(schemas)/library');
+  };
+
   if (isLoading && schemas.length === 0) {
     return (
       <ThemedView style={styles.container}>
@@ -128,6 +132,12 @@ export default function SchemasScreen() {
                 onPress={handleAIImportPress}
                 fullWidth
               />
+              <Button
+                title="Browse Exercise Library"
+                variant="ghost"
+                onPress={handleLibraryPress}
+                fullWidth
+              />
             </View>
           </View>
         ) : (
@@ -150,6 +160,12 @@ export default function SchemasScreen() {
                 title="Import with AI"
                 variant="secondary"
                 onPress={handleAIImportPress}
+                fullWidth
+              />
+              <Button
+                title="Browse Exercise Library"
+                variant="ghost"
+                onPress={handleLibraryPress}
                 fullWidth
               />
             </View>

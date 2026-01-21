@@ -48,6 +48,12 @@ export default function SchemasLayout() {
           title: 'Review Imported Schema',
         }}
       />
+      <Stack.Screen
+        name="library"
+        options={{
+          title: 'Exercise Library',
+        }}
+      />
     </Stack>
   );
 }
