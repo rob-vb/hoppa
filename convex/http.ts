@@ -73,6 +73,17 @@ http.route({
 
         if (trainerId) {
           const status = mapStripeStatus(subscription.status);
+
+          // Check if subscription is set to cancel at period end
+          // but hasn't actually been canceled yet
+          if (subscription.cancel_at_period_end && subscription.status === "active") {
+            // Don't downgrade yet, just update the status
+            // The actual downgrade happens when subscription.deleted fires
+            console.log(
+              `Subscription ${subscription.id} set to cancel at period end`
+            );
+          }
+
           await ctx.runMutation(
             internal.stripe.updateTrainerSubscriptionFromWebhook,
             {

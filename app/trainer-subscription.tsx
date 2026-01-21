@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -21,6 +22,8 @@ import { TierSelector, TIERS, type TierType } from '@/components/ui/tier-selecto
 import { api } from '@/convex/_generated/api';
 import { Colors } from '@/constants/theme';
 
+type ChangeType = 'upgrade' | 'downgrade' | 'downgrade-to-starter' | null;
+
 export default function TrainerSubscriptionScreen() {
   const router = useRouter();
   const { success, canceled } = useLocalSearchParams<{ success?: string; canceled?: string }>();
@@ -29,6 +32,9 @@ export default function TrainerSubscriptionScreen() {
   const createCheckoutSession = useAction(api.stripe.createCheckoutSession);
   const createBillingPortal = useAction(api.stripe.createBillingPortalSession);
   const subscriptionInfo = useAction(api.stripe.getSubscriptionInfo);
+  const changeSubscription = useAction(api.stripe.changeSubscription);
+  const downgradeToStarter = useAction(api.stripe.downgradeToStarter);
+  const resumeSubscription = useAction(api.stripe.resumeSubscription);
 
   const [selectedTier, setSelectedTier] = useState<TierType>('starter');
   const [isLoading, setIsLoading] = useState(false);
@@ -43,6 +49,12 @@ export default function TrainerSubscriptionScreen() {
       cancelAtPeriodEnd: boolean;
     };
   } | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingChange, setPendingChange] = useState<{
+    type: ChangeType;
+    tier: TierType;
+  } | null>(null);
+  const [isChanging, setIsChanging] = useState(false);
 
   const loadSubscriptionInfo = useCallback(async () => {
     try {
@@ -92,21 +104,60 @@ export default function TrainerSubscriptionScreen() {
     setSelectedTier(tier);
   };
 
-  const handleSubscribe = async () => {
-    if (selectedTier === 'starter') {
-      // Starter is free, just close
-      router.back();
-      return;
-    }
+  // Determine what type of change this is
+  const getChangeType = (fromTier: TierType, toTier: TierType): ChangeType => {
+    if (fromTier === toTier) return null;
+    if (toTier === 'starter') return 'downgrade-to-starter';
 
+    const tierOrder = { starter: 0, pro: 1, studio: 2 };
+    return tierOrder[toTier] > tierOrder[fromTier] ? 'upgrade' : 'downgrade';
+  };
+
+  // Check if downgrade would exceed client limit
+  const wouldExceedClientLimit = (newTier: TierType): boolean => {
+    if (!clientCount) return false;
+    const newMaxClients = TIERS[newTier].maxClients;
+    return clientCount.active > newMaxClients;
+  };
+
+  const handleTierChange = () => {
     if (selectedTier === trainer?.subscriptionTier) {
-      // Already on this tier
       if (Platform.OS !== 'web') {
         Alert.alert('Already Subscribed', `You are already on the ${TIERS[selectedTier].name} plan.`);
       }
       return;
     }
 
+    const currentTier = trainer?.subscriptionTier as TierType || 'starter';
+    const changeType = getChangeType(currentTier, selectedTier);
+
+    if (!changeType) return;
+
+    // Check client limit for downgrades
+    if ((changeType === 'downgrade' || changeType === 'downgrade-to-starter') && wouldExceedClientLimit(selectedTier)) {
+      const exceededBy = (clientCount?.active || 0) - TIERS[selectedTier].maxClients;
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'Cannot Downgrade',
+          `You have ${clientCount?.active} active clients but the ${TIERS[selectedTier].name} plan only allows ${TIERS[selectedTier].maxClients}. Please remove ${exceededBy} client${exceededBy === 1 ? '' : 's'} before downgrading.`,
+          [{ text: 'OK' }]
+        );
+      }
+      return;
+    }
+
+    // For new subscriptions (from starter), go directly to checkout
+    if (currentTier === 'starter' && selectedTier !== 'starter') {
+      handleNewSubscription();
+      return;
+    }
+
+    // Show confirmation modal for changes
+    setPendingChange({ type: changeType, tier: selectedTier });
+    setShowConfirmModal(true);
+  };
+
+  const handleNewSubscription = async () => {
     setIsLoading(true);
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -133,6 +184,89 @@ export default function TrainerSubscriptionScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
       const message = error instanceof Error ? error.message : 'Failed to start checkout';
+      if (Platform.OS !== 'web') {
+        Alert.alert('Error', message);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfirmChange = async () => {
+    if (!pendingChange) return;
+
+    setIsChanging(true);
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+
+    try {
+      if (pendingChange.type === 'downgrade-to-starter') {
+        const result = await downgradeToStarter();
+        if (result.success) {
+          if (Platform.OS === 'ios') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          if (Platform.OS !== 'web') {
+            Alert.alert(
+              'Subscription Canceled',
+              `Your subscription will end on ${new Date(result.endDate * 1000).toLocaleDateString()}. You'll be downgraded to the Starter plan after that.`
+            );
+          }
+          await loadSubscriptionInfo();
+        }
+      } else if (pendingChange.type === 'upgrade' || pendingChange.type === 'downgrade') {
+        const result = await changeSubscription({
+          newTier: pendingChange.tier as 'pro' | 'studio',
+        });
+        if (result.success) {
+          if (Platform.OS === 'ios') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          if (Platform.OS !== 'web') {
+            Alert.alert(
+              pendingChange.type === 'upgrade' ? 'Upgraded!' : 'Plan Changed',
+              result.message
+            );
+          }
+          await loadSubscriptionInfo();
+        }
+      }
+    } catch (error) {
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      const message = error instanceof Error ? error.message : 'Failed to change subscription';
+      if (Platform.OS !== 'web') {
+        Alert.alert('Error', message);
+      }
+    } finally {
+      setIsChanging(false);
+      setShowConfirmModal(false);
+      setPendingChange(null);
+    }
+  };
+
+  const handleResumeSubscription = async () => {
+    setIsLoading(true);
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+
+    try {
+      await resumeSubscription();
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      if (Platform.OS !== 'web') {
+        Alert.alert('Subscription Resumed', 'Your subscription will continue as normal.');
+      }
+      await loadSubscriptionInfo();
+    } catch (error) {
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      const message = error instanceof Error ? error.message : 'Failed to resume subscription';
       if (Platform.OS !== 'web') {
         Alert.alert('Error', message);
       }
@@ -314,16 +448,46 @@ export default function TrainerSubscriptionScreen() {
           />
         </View>
 
-        {/* Subscribe Button */}
-        {selectedTier !== 'starter' && selectedTier !== currentTier && (
+        {/* Action Button */}
+        {selectedTier !== currentTier && (
           <Button
-            title={isLoading ? 'Processing...' : `Subscribe to ${TIERS[selectedTier].name}`}
-            onPress={handleSubscribe}
+            title={
+              isLoading
+                ? 'Processing...'
+                : selectedTier === 'starter'
+                  ? 'Downgrade to Starter'
+                  : currentTier === 'starter'
+                    ? `Subscribe to ${TIERS[selectedTier].name}`
+                    : getChangeType(currentTier, selectedTier) === 'upgrade'
+                      ? `Upgrade to ${TIERS[selectedTier].name}`
+                      : `Downgrade to ${TIERS[selectedTier].name}`
+            }
+            onPress={handleTierChange}
             loading={isLoading}
-            disabled={isLoading || isLoadingPortal}
+            disabled={isLoading || isLoadingPortal || isChanging}
             fullWidth
             size="lg"
+            variant={
+              selectedTier === 'starter' ||
+              (currentTier !== 'starter' && getChangeType(currentTier, selectedTier) === 'downgrade')
+                ? 'secondary'
+                : 'primary'
+            }
           />
+        )}
+
+        {/* Resume Subscription Button */}
+        {willCancel && !isCanceled && (
+          <View style={styles.resumeButton}>
+            <Button
+              title={isLoading ? 'Processing...' : 'Keep My Subscription'}
+              onPress={handleResumeSubscription}
+              loading={isLoading}
+              disabled={isLoading || isLoadingPortal || isChanging}
+              fullWidth
+              size="lg"
+            />
+          </View>
         )}
 
         {/* Manage Subscription Button */}
@@ -358,9 +522,127 @@ export default function TrainerSubscriptionScreen() {
         {/* Legal */}
         <ThemedText style={styles.legalText}>
           Subscriptions are billed monthly. You can cancel anytime from the billing
-          portal. Changes take effect immediately.
+          portal. Upgrades take effect immediately with prorated billing.
         </ThemedText>
       </ScrollView>
+
+      {/* Confirmation Modal */}
+      <Modal
+        visible={showConfirmModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowConfirmModal(false);
+          setPendingChange(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <MaterialIcons
+                name={
+                  pendingChange?.type === 'upgrade'
+                    ? 'trending-up'
+                    : pendingChange?.type === 'downgrade-to-starter'
+                      ? 'cancel'
+                      : 'trending-down'
+                }
+                size={32}
+                color={
+                  pendingChange?.type === 'upgrade'
+                    ? '#10B981'
+                    : '#F59E0B'
+                }
+              />
+              <ThemedText style={styles.modalTitle}>
+                {pendingChange?.type === 'upgrade'
+                  ? 'Upgrade Plan'
+                  : pendingChange?.type === 'downgrade-to-starter'
+                    ? 'Cancel Subscription'
+                    : 'Downgrade Plan'}
+              </ThemedText>
+            </View>
+
+            <ThemedText style={styles.modalText}>
+              {pendingChange?.type === 'upgrade' && (
+                <>
+                  {"You're upgrading to "}<ThemedText style={styles.modalBold}>{TIERS[pendingChange.tier].name}</ThemedText>.
+                  {'\n\n'}
+                  {"You'll be charged a prorated amount for the remainder of your billing cycle, then "}
+                  <ThemedText style={styles.modalBold}>{TIERS[pendingChange.tier].price}{TIERS[pendingChange.tier].period}</ThemedText>{' '}
+                  starting next billing cycle.
+                  {'\n\n'}
+                  Your client limit will increase to <ThemedText style={styles.modalBold}>{TIERS[pendingChange.tier].maxClients}</ThemedText> immediately.
+                </>
+              )}
+              {pendingChange?.type === 'downgrade' && (
+                <>
+                  {"You're downgrading to "}<ThemedText style={styles.modalBold}>{TIERS[pendingChange.tier].name}</ThemedText>.
+                  {'\n\n'}
+                  Your current plan will remain active until the end of your billing period.
+                  {"Then you'll be billed "}
+                  <ThemedText style={styles.modalBold}>{TIERS[pendingChange.tier].price}{TIERS[pendingChange.tier].period}</ThemedText>.
+                  {'\n\n'}
+                  Your client limit will change to <ThemedText style={styles.modalBold}>{TIERS[pendingChange.tier].maxClients}</ThemedText>.
+                </>
+              )}
+              {pendingChange?.type === 'downgrade-to-starter' && (
+                <>
+                  {"You're canceling your subscription."}
+                  {'\n\n'}
+                  Your current plan will remain active until the end of your billing period.
+                  {"After that, you'll be on the free "}<ThemedText style={styles.modalBold}>Starter</ThemedText> plan.
+                  {'\n\n'}
+                  Your client limit will be reduced to <ThemedText style={styles.modalBold}>3</ThemedText>.
+                  {clientCount && clientCount.active > 3 && (
+                    <>
+                      {'\n\n'}
+                      <ThemedText style={styles.modalWarning}>
+                        {"Warning: You currently have "}{clientCount.active}{" active clients. "}
+                        {"You'll need to reduce to 3 clients before the subscription ends."}
+                      </ThemedText>
+                    </>
+                  )}
+                </>
+              )}
+            </ThemedText>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={() => {
+                  setShowConfirmModal(false);
+                  setPendingChange(null);
+                }}
+                style={styles.modalCancelButton}
+                disabled={isChanging}
+              >
+                <ThemedText style={styles.modalCancelText}>Cancel</ThemedText>
+              </Pressable>
+
+              <Pressable
+                onPress={handleConfirmChange}
+                style={[
+                  styles.modalConfirmButton,
+                  pendingChange?.type !== 'upgrade' && styles.modalConfirmButtonWarning,
+                ]}
+                disabled={isChanging}
+              >
+                {isChanging ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <ThemedText style={styles.modalConfirmText}>
+                    {pendingChange?.type === 'upgrade'
+                      ? 'Upgrade Now'
+                      : pendingChange?.type === 'downgrade-to-starter'
+                        ? 'Cancel Subscription'
+                        : 'Confirm Downgrade'}
+                  </ThemedText>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -574,5 +856,77 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#F59E0B',
+  },
+  resumeButton: {
+    marginTop: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  modalText: {
+    fontSize: 15,
+    color: Colors.dark.textSecondary,
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalBold: {
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  modalWarning: {
+    color: '#F59E0B',
+    fontWeight: '500',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: Colors.dark.background,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  modalConfirmButton: {
+    flex: 1,
+    backgroundColor: Colors.dark.primary,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalConfirmButtonWarning: {
+    backgroundColor: '#F59E0B',
+  },
+  modalConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

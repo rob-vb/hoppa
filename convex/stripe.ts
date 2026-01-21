@@ -287,6 +287,165 @@ export const getSubscriptionInfo = action({
   },
 });
 
+// Upgrade or downgrade an existing subscription
+export const changeSubscription = action({
+  args: {
+    newTier: v.union(v.literal("pro"), v.literal("studio")),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; message: string }> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const trainer = await ctx.runQuery(internal.stripe.getTrainerByUserId, {
+      userId,
+    });
+    if (!trainer) {
+      throw new Error("Trainer profile not found");
+    }
+
+    if (!trainer.stripeSubscriptionId) {
+      throw new Error("No active subscription to modify");
+    }
+
+    const stripe = getStripeClient();
+    const newTierConfig = TRAINER_TIERS[args.newTier];
+
+    // Get the new price
+    const newPriceId = await getOrCreatePrice(
+      stripe,
+      args.newTier,
+      newTierConfig.price
+    );
+
+    // Retrieve current subscription
+    const subscription = await stripe.subscriptions.retrieve(
+      trainer.stripeSubscriptionId
+    );
+
+    if (subscription.status === "canceled") {
+      throw new Error("Cannot modify a canceled subscription");
+    }
+
+    // Get current subscription item
+    const subscriptionItem = subscription.items.data[0];
+    if (!subscriptionItem) {
+      throw new Error("No subscription item found");
+    }
+
+    // Determine if this is an upgrade or downgrade
+    const currentTier = trainer.subscriptionTier;
+    const isUpgrade =
+      (currentTier === "starter" && (args.newTier === "pro" || args.newTier === "studio")) ||
+      (currentTier === "pro" && args.newTier === "studio");
+
+    // Update the subscription
+    await stripe.subscriptions.update(trainer.stripeSubscriptionId, {
+      items: [
+        {
+          id: subscriptionItem.id,
+          price: newPriceId,
+        },
+      ],
+      // For upgrades, charge immediately with prorated amount
+      // For downgrades, apply at end of billing period
+      proration_behavior: isUpgrade ? "create_prorations" : "none",
+      // Update metadata with new tier
+      metadata: {
+        trainerId: trainer._id,
+        tier: args.newTier,
+      },
+    });
+
+    // For immediate updates (upgrades), update our database right away
+    // For downgrades, the webhook will handle it when the billing period ends
+    if (isUpgrade) {
+      await ctx.runMutation(internal.stripe.updateTrainerSubscriptionFromWebhook, {
+        trainerId: trainer._id,
+        subscriptionTier: args.newTier,
+        subscriptionStatus: "active",
+        stripeSubscriptionId: trainer.stripeSubscriptionId,
+      });
+    }
+
+    return {
+      success: true,
+      message: isUpgrade
+        ? `Upgraded to ${newTierConfig.name}. You will be charged a prorated amount.`
+        : `Downgraded to ${newTierConfig.name}. Changes will take effect at the end of your billing period.`,
+    };
+  },
+});
+
+// Downgrade to starter (cancel subscription)
+export const downgradeToStarter = action({
+  args: {},
+  handler: async (ctx): Promise<{ success: boolean; endDate: number }> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const trainer = await ctx.runQuery(internal.stripe.getTrainerByUserId, {
+      userId,
+    });
+    if (!trainer) {
+      throw new Error("Trainer profile not found");
+    }
+
+    if (!trainer.stripeSubscriptionId) {
+      throw new Error("No active subscription to cancel");
+    }
+
+    const stripe = getStripeClient();
+
+    // Cancel at period end (graceful downgrade)
+    const subscription = await stripe.subscriptions.update(
+      trainer.stripeSubscriptionId,
+      {
+        cancel_at_period_end: true,
+      }
+    );
+
+    return {
+      success: true,
+      endDate: subscription.current_period_end,
+    };
+  },
+});
+
+// Resume a subscription that was set to cancel
+export const resumeSubscription = action({
+  args: {},
+  handler: async (ctx): Promise<{ success: boolean }> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Not authenticated");
+    }
+
+    const trainer = await ctx.runQuery(internal.stripe.getTrainerByUserId, {
+      userId,
+    });
+    if (!trainer) {
+      throw new Error("Trainer profile not found");
+    }
+
+    if (!trainer.stripeSubscriptionId) {
+      throw new Error("No subscription to resume");
+    }
+
+    const stripe = getStripeClient();
+
+    // Remove the cancel_at_period_end flag
+    await stripe.subscriptions.update(trainer.stripeSubscriptionId, {
+      cancel_at_period_end: false,
+    });
+
+    return { success: true };
+  },
+});
+
 // Helper function to get or create a Stripe price for a tier
 async function getOrCreatePrice(
   stripe: Stripe,
