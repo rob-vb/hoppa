@@ -340,6 +340,7 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
       await syncEngine.queueCreate('exercise', newExercise.id, {
         dayId: newExercise.dayId,
         name: newExercise.name,
+        notes: newExercise.notes,
         equipmentType: newExercise.equipmentType,
         baseWeight: newExercise.baseWeight,
         targetSets: newExercise.targetSets,

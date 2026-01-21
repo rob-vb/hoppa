@@ -167,14 +167,14 @@
 - [x] Create client list view with status indicators
 - [x] Implement client states (invited, active, paused, archived)
 - [x] Build client card component
-- [ ] Add client search and filtering
+- [x] Add client search and filtering
 
 #### Schema Builder - Web (2 weeks)
-- [ ] Build drag-and-drop schema builder
-- [ ] Create exercise library with search
-- [ ] Implement day management (add, reorder, delete)
-- [ ] Implement exercise management within days
-- [ ] Add all exercise fields (equipment, weight, sets, reps, progression)
+- [x] Build drag-and-drop schema builder
+- [x] Create exercise library with search
+- [x] Implement day management (add, reorder, delete)
+- [x] Implement exercise management within days
+- [x] Add all exercise fields (equipment, weight, sets, reps, progression)
 - [ ] Add exercise notes field (form cues)
 - [ ] Build template save/load functionality
 - [ ] Create schemaTemplates table in Convex

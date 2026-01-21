@@ -36,6 +36,22 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   return db;
 }
 
+// Run database migrations for schema updates
+async function runMigrations(): Promise<void> {
+  if (!db) return;
+
+  // Migration 1: Add notes column to exercises table
+  // SQLite doesn't have IF NOT EXISTS for ALTER TABLE, so we check first
+  const tableInfo = await db.getAllAsync<{ name: string }>(
+    "PRAGMA table_info(exercises)"
+  );
+  const hasNotesColumn = tableInfo.some((col) => col.name === 'notes');
+
+  if (!hasNotesColumn) {
+    await db.execAsync('ALTER TABLE exercises ADD COLUMN notes TEXT');
+  }
+}
+
 // Create all tables
 async function initializeTables(): Promise<void> {
   if (!db) return;
@@ -64,6 +80,7 @@ async function initializeTables(): Promise<void> {
       id TEXT PRIMARY KEY,
       day_id TEXT NOT NULL REFERENCES workout_days(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
+      notes TEXT,
       equipment_type TEXT NOT NULL CHECK (equipment_type IN ('plates', 'machine', 'other')),
       base_weight REAL NOT NULL DEFAULT 0,
       target_sets INTEGER NOT NULL,
@@ -109,7 +126,13 @@ async function initializeTables(): Promise<void> {
     );
 
     -- Indexes for common queries
-    CREATE INDEX IF NOT EXISTS idx_workout_days_schema ON workout_days(schema_id);
+    CREATE INDEX IF NOT EXISTS idx_workout_days_schema ON workout_days(schema_id);`);
+
+  // Run migrations for existing databases
+  await runMigrations();
+
+  await db.execAsync(`
+    -- Continue with remaining indexes (idempotent)
     CREATE INDEX IF NOT EXISTS idx_exercises_day ON exercises(day_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_schema ON workout_sessions(schema_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_day ON workout_sessions(day_id);
@@ -369,14 +392,15 @@ export async function createExercise(exercise: Omit<Exercise, 'id' | 'updatedAt'
   }
 
   await database.runAsync(
-    `INSERT INTO exercises (id, day_id, name, equipment_type, base_weight, target_sets,
+    `INSERT INTO exercises (id, day_id, name, notes, equipment_type, base_weight, target_sets,
      target_reps_min, target_reps_max, progressive_loading_enabled, progression_increment,
      current_weight, order_index, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       exercise.dayId,
       exercise.name,
+      exercise.notes ?? null,
       exercise.equipmentType,
       exercise.baseWeight,
       exercise.targetSets,
@@ -390,7 +414,7 @@ export async function createExercise(exercise: Omit<Exercise, 'id' | 'updatedAt'
     ]
   );
 
-  return { id, ...exercise, orderIndex: actualOrderIndex, updatedAt: now };
+  return { id, ...exercise, notes: exercise.notes ?? null, orderIndex: actualOrderIndex, updatedAt: now };
 }
 
 export async function getExercisesByDay(dayId: string): Promise<Exercise[]> {
@@ -399,6 +423,7 @@ export async function getExercisesByDay(dayId: string): Promise<Exercise[]> {
     id: string;
     day_id: string;
     name: string;
+    notes: string | null;
     equipment_type: EquipmentType;
     base_weight: number;
     target_sets: number;
@@ -415,6 +440,7 @@ export async function getExercisesByDay(dayId: string): Promise<Exercise[]> {
     id: row.id,
     dayId: row.day_id,
     name: row.name,
+    notes: row.notes,
     equipmentType: row.equipment_type,
     baseWeight: row.base_weight,
     targetSets: row.target_sets,
@@ -434,6 +460,7 @@ export async function getExerciseById(id: string): Promise<Exercise | null> {
     id: string;
     day_id: string;
     name: string;
+    notes: string | null;
     equipment_type: EquipmentType;
     base_weight: number;
     target_sets: number;
@@ -452,6 +479,7 @@ export async function getExerciseById(id: string): Promise<Exercise | null> {
     id: row.id,
     dayId: row.day_id,
     name: row.name,
+    notes: row.notes,
     equipmentType: row.equipment_type,
     baseWeight: row.base_weight,
     targetSets: row.target_sets,
@@ -477,6 +505,10 @@ export async function updateExercise(
   if (updates.name !== undefined) {
     setClauses.push('name = ?');
     values.push(updates.name);
+  }
+  if (updates.notes !== undefined) {
+    setClauses.push('notes = ?');
+    values.push(updates.notes ?? null);
   }
   if (updates.equipmentType !== undefined) {
     setClauses.push('equipment_type = ?');

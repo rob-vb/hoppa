@@ -28,6 +28,7 @@ export interface Exercise {
   id: string;
   dayId: string;
   name: string;
+  notes: string | null; // Form cues and notes for the exercise
   equipmentType: EquipmentType;
   baseWeight: number;
   targetSets: number;

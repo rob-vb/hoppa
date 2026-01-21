@@ -30,6 +30,7 @@ import type { ExerciseTemplate } from '@/constants/exercise-library';
 interface LocalExercise {
   id: string;
   name: string;
+  notes: string;
   equipmentType: EquipmentType;
   baseWeight: string;
   targetSets: string;
@@ -60,6 +61,7 @@ function createEmptyExercise(): LocalExercise {
   return {
     id: generateId(),
     name: '',
+    notes: '',
     equipmentType: 'plates',
     baseWeight: '0',
     targetSets: '3',
