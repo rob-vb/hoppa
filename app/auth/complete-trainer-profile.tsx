@@ -8,19 +8,25 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useAction } from 'convex/react';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/contexts/auth-context';
+import { TierSelector, type TierType } from '@/components/ui/tier-selector';
+import { api } from '@/convex/_generated/api';
 
 export default function CompleteTrainerProfileScreen() {
   const { registerAsTrainer, user } = useAuth();
+  const createCheckoutSession = useAction(api.stripe.createCheckoutSession);
   const router = useRouter();
   const [businessName, setBusinessName] = useState('');
   const [bio, setBio] = useState('');
+  const [selectedTier, setSelectedTier] = useState<TierType>('starter');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -31,9 +37,29 @@ export default function CompleteTrainerProfileScreen() {
       if (Platform.OS === 'ios') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      await registerAsTrainer(businessName || undefined, bio || undefined);
-      // Navigation will be handled automatically by auth state change
-      router.replace('/(tabs)/(home)');
+      const result = await registerAsTrainer(businessName || undefined, bio || undefined, selectedTier);
+
+      // If paid tier selected, redirect to Stripe checkout
+      if (result.requiresPayment) {
+        const baseUrl = Platform.OS === 'web'
+          ? window.location.origin
+          : 'hoppa://';
+
+        const { url } = await createCheckoutSession({
+          tier: result.tier as 'pro' | 'studio',
+          successUrl: `${baseUrl}/trainer-subscription?success=true`,
+          cancelUrl: `${baseUrl}/trainer-subscription?canceled=true`,
+        });
+
+        if (Platform.OS === 'web') {
+          window.location.href = url;
+        } else {
+          await Linking.openURL(url);
+        }
+      } else {
+        // Navigation will be handled automatically by auth state change
+        router.replace('/(tabs)/(home)');
+      }
     } catch {
       setError('Failed to complete trainer registration. Please try again.');
       if (Platform.OS === 'ios') {
@@ -103,11 +129,13 @@ export default function CompleteTrainerProfileScreen() {
               />
             </View>
 
-            <View style={styles.tierInfo}>
-              <ThemedText style={styles.tierTitle}>Starter Plan (Free)</ThemedText>
-              <ThemedText style={styles.tierDescription}>
-                Manage up to 3 clients, basic features included
-              </ThemedText>
+            <View style={styles.tierSection}>
+              <ThemedText style={styles.tierSectionTitle}>Choose Your Plan</ThemedText>
+              <TierSelector
+                selectedTier={selectedTier}
+                onSelectTier={setSelectedTier}
+                compact
+              />
             </View>
 
             <TouchableOpacity
@@ -193,22 +221,13 @@ const styles = StyleSheet.create({
     minHeight: 100,
     paddingTop: 14,
   },
-  tierInfo: {
-    backgroundColor: '#1F2937',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
+  tierSection: {
+    gap: 12,
   },
-  tierTitle: {
+  tierSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#3B82F6',
-    marginBottom: 4,
-  },
-  tierDescription: {
-    fontSize: 14,
-    color: '#9CA3AF',
+    color: '#F9FAFB',
   },
   button: {
     backgroundColor: '#3B82F6',

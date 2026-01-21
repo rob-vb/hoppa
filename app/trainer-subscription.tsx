@@ -17,59 +17,9 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
+import { TierSelector, TIERS, type TierType } from '@/components/ui/tier-selector';
 import { api } from '@/convex/_generated/api';
 import { Colors } from '@/constants/theme';
-
-type TierType = 'starter' | 'pro' | 'studio';
-
-interface TierInfo {
-  name: string;
-  price: string;
-  period: string;
-  maxClients: number;
-  features: string[];
-  recommended?: boolean;
-}
-
-const TIERS: Record<TierType, TierInfo> = {
-  starter: {
-    name: 'Starter',
-    price: 'Free',
-    period: '',
-    maxClients: 3,
-    features: [
-      'Up to 3 clients',
-      'Basic schema templates',
-      'Email support',
-    ],
-  },
-  pro: {
-    name: 'Pro',
-    price: '€29',
-    period: '/month',
-    maxClients: 30,
-    features: [
-      'Up to 30 clients',
-      'Advanced analytics',
-      'Priority support',
-      'Custom branding',
-    ],
-    recommended: true,
-  },
-  studio: {
-    name: 'Studio',
-    price: '€79',
-    period: '/month',
-    maxClients: 100,
-    features: [
-      'Up to 100 clients',
-      'Team management',
-      'API access',
-      'Dedicated support',
-      'White-label options',
-    ],
-  },
-};
 
 export default function TrainerSubscriptionScreen() {
   const router = useRouter();
@@ -78,7 +28,7 @@ export default function TrainerSubscriptionScreen() {
   const createBillingPortal = useAction(api.stripe.createBillingPortalSession);
   const subscriptionInfo = useAction(api.stripe.getSubscriptionInfo);
 
-  const [selectedTier, setSelectedTier] = useState<TierType>('pro');
+  const [selectedTier, setSelectedTier] = useState<TierType>('starter');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
   const [currentSubscription, setCurrentSubscription] = useState<{
@@ -109,9 +59,6 @@ export default function TrainerSubscriptionScreen() {
   }, [trainer, loadSubscriptionInfo]);
 
   const handleSelectTier = (tier: TierType) => {
-    if (Platform.OS === 'ios') {
-      Haptics.selectionAsync();
-    }
     setSelectedTier(tier);
   };
 
@@ -254,73 +201,11 @@ export default function TrainerSubscriptionScreen() {
 
         {/* Tier Cards */}
         <View style={styles.tiersContainer}>
-          {(Object.entries(TIERS) as [TierType, TierInfo][]).map(([tierKey, tier]) => {
-            const isCurrentTier = tierKey === currentTier;
-            const isSelected = tierKey === selectedTier;
-
-            return (
-              <Pressable
-                key={tierKey}
-                onPress={() => handleSelectTier(tierKey)}
-                style={[
-                  styles.tierCard,
-                  isSelected && styles.tierCardSelected,
-                  tier.recommended && styles.tierCardRecommended,
-                ]}
-              >
-                {tier.recommended && (
-                  <View style={styles.recommendedBadge}>
-                    <ThemedText style={styles.recommendedText}>RECOMMENDED</ThemedText>
-                  </View>
-                )}
-
-                <View style={styles.tierHeader}>
-                  <View style={styles.tierTitleRow}>
-                    <View
-                      style={[
-                        styles.radioOuter,
-                        isSelected && styles.radioOuterSelected,
-                      ]}
-                    >
-                      {isSelected && <View style={styles.radioInner} />}
-                    </View>
-                    <View>
-                      <ThemedText style={styles.tierName}>{tier.name}</ThemedText>
-                      {isCurrentTier && (
-                        <ThemedText style={styles.currentLabel}>Current</ThemedText>
-                      )}
-                    </View>
-                  </View>
-                  <View style={styles.priceRow}>
-                    <ThemedText style={styles.tierPrice}>{tier.price}</ThemedText>
-                    {tier.period && (
-                      <ThemedText style={styles.tierPeriod}>{tier.period}</ThemedText>
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.tierFeatures}>
-                  {tier.features.map((feature, index) => (
-                    <View key={index} style={styles.featureRow}>
-                      <MaterialIcons
-                        name="check"
-                        size={18}
-                        color={Colors.dark.primary}
-                      />
-                      <ThemedText style={styles.featureText}>{feature}</ThemedText>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={styles.clientLimit}>
-                  <MaterialIcons name="people" size={16} color={Colors.dark.textSecondary} />
-                  <ThemedText style={styles.clientLimitText}>
-                    {tier.maxClients} clients max
-                  </ThemedText>
-                </View>
-              </Pressable>
-            );
-          })}
+          <TierSelector
+            selectedTier={selectedTier}
+            onSelectTier={handleSelectTier}
+            currentTier={currentTier}
+          />
         </View>
 
         {/* Subscribe Button */}
@@ -445,113 +330,7 @@ const styles = StyleSheet.create({
     color: '#10B981',
   },
   tiersContainer: {
-    gap: 16,
     marginBottom: 24,
-  },
-  tierCard: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  tierCardSelected: {
-    borderColor: Colors.dark.primary,
-  },
-  tierCardRecommended: {
-    borderColor: Colors.dark.primary + '50',
-  },
-  recommendedBadge: {
-    position: 'absolute',
-    top: -10,
-    right: 12,
-    backgroundColor: Colors.dark.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  recommendedText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
-  },
-  tierHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  tierTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: Colors.dark.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOuterSelected: {
-    borderColor: Colors.dark.primary,
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.dark.primary,
-  },
-  tierName: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  currentLabel: {
-    fontSize: 12,
-    color: '#10B981',
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  tierPrice: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-  tierPeriod: {
-    fontSize: 14,
-    color: Colors.dark.textSecondary,
-    marginLeft: 2,
-  },
-  tierFeatures: {
-    gap: 8,
-    marginBottom: 12,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  featureText: {
-    fontSize: 14,
-    color: Colors.dark.text,
-  },
-  clientLimit: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.dark.border,
-  },
-  clientLimitText: {
-    fontSize: 13,
-    color: Colors.dark.textSecondary,
   },
   manageButton: {
     alignItems: 'center',

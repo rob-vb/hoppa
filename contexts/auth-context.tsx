@@ -4,6 +4,14 @@ import { useQuery, useConvexAuth, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuthStore, type User, type TrainerProfile } from '@/stores/auth-store';
 
+type TierType = 'starter' | 'pro' | 'studio';
+
+interface RegisterResult {
+  trainerId: string;
+  requiresPayment: boolean;
+  tier: TierType;
+}
+
 interface AuthContextValue {
   user: User | null;
   trainerProfile: TrainerProfile | null;
@@ -13,12 +21,12 @@ interface AuthContextValue {
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name?: string) => Promise<void>;
-  signUpAsTrainer: (email: string, password: string, name: string, businessName?: string) => Promise<void>;
+  signUpAsTrainer: (email: string, password: string, name: string, businessName?: string, selectedTier?: TierType) => Promise<RegisterResult>;
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
-  registerAsTrainer: (businessName?: string, bio?: string) => Promise<void>;
+  registerAsTrainer: (businessName?: string, bio?: string, selectedTier?: TierType) => Promise<RegisterResult>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -153,21 +161,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Sign up as a trainer - creates user and registers as trainer
-  const signUpAsTrainer = async (email: string, password: string, name: string, businessName?: string) => {
+  const signUpAsTrainer = async (email: string, password: string, name: string, businessName?: string, selectedTier?: TierType): Promise<RegisterResult> => {
     try {
       clearError();
       // First, sign up the user
       await convexSignIn("password", { email, password, name, flow: "signUp" });
-      // The trainer registration will be called after the user is created
-      // via the registerAsTrainer function once authenticated
-      // Store business name for later use if needed
-      if (businessName) {
-        // We'll register as trainer once the auth state is synced
-        // This is handled by calling registerAsTrainer after signUp completes
-        await registerTrainerMutation({ businessName });
-      } else {
-        await registerTrainerMutation({});
-      }
+      // Register as trainer with selected tier
+      const result = await registerTrainerMutation({
+        businessName: businessName || undefined,
+        selectedTier: selectedTier || "starter",
+      });
+      return result as RegisterResult;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign up as trainer');
       throw err;
@@ -175,10 +179,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Register an existing authenticated user as a trainer
-  const registerAsTrainer = async (businessName?: string, bio?: string) => {
+  const registerAsTrainer = async (businessName?: string, bio?: string, selectedTier?: TierType): Promise<RegisterResult> => {
     try {
       clearError();
-      await registerTrainerMutation({ businessName, bio });
+      const result = await registerTrainerMutation({
+        businessName,
+        bio,
+        selectedTier: selectedTier || "starter",
+      });
+      return result as RegisterResult;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to register as trainer');
       throw err;

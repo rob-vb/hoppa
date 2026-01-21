@@ -46,6 +46,9 @@ export const register = mutation({
     bio: v.optional(v.string()),
     qualifications: v.optional(v.array(v.string())),
     specialties: v.optional(v.array(v.string())),
+    selectedTier: v.optional(
+      v.union(v.literal("starter"), v.literal("pro"), v.literal("studio"))
+    ),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -70,7 +73,17 @@ export const register = mutation({
 
     const now = Date.now();
 
-    // Create trainer profile with starter tier (free)
+    // Determine tier and max clients
+    const tier = args.selectedTier || "starter";
+    let maxClients = 3; // starter default
+    if (tier === "pro") {
+      maxClients = 30;
+    } else if (tier === "studio") {
+      maxClients = 100;
+    }
+
+    // Create trainer profile
+    // Note: For paid tiers, actual subscription activation happens via Stripe checkout
     const trainerId = await ctx.db.insert("trainers", {
       userId,
       businessName: args.businessName,
@@ -78,14 +91,14 @@ export const register = mutation({
       qualifications: args.qualifications,
       specialties: args.specialties,
       stripeOnboarded: false,
-      subscriptionTier: "starter",
-      subscriptionStatus: "active",
-      maxClients: 3, // Starter tier limit
+      subscriptionTier: tier,
+      subscriptionStatus: tier === "starter" ? "active" : "trialing",
+      maxClients,
       createdAt: now,
       updatedAt: now,
     });
 
-    return trainerId;
+    return { trainerId, requiresPayment: tier !== "starter", tier };
   },
 });
 
