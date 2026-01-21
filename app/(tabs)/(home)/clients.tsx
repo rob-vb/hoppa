@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -7,6 +7,7 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -35,6 +36,7 @@ const FILTERS: { label: string; value: FilterStatus }[] = [
 
 export default function ClientsScreen() {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -47,10 +49,29 @@ export default function ClientsScreen() {
   const cancelInvitation = useMutation(api.clientInvitations.cancelInvitation);
   const updateStatus = useMutation(api.clientInvitations.updateClientStatus);
 
-  const filteredClients = clients?.filter((client) => {
-    if (filterStatus === 'all') return true;
-    return client.status === filterStatus;
-  });
+  const filteredClients = useMemo(() => {
+    if (!clients) return undefined;
+
+    const query = searchQuery.toLowerCase().trim();
+
+    return clients.filter((client) => {
+      // Filter by status
+      if (filterStatus !== 'all' && client.status !== filterStatus) {
+        return false;
+      }
+
+      // Filter by search query (name or email)
+      if (query) {
+        const name = client.user?.name?.toLowerCase() ?? '';
+        const email = client.clientEmail.toLowerCase();
+        if (!name.includes(query) && !email.includes(query)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [clients, filterStatus, searchQuery]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -220,6 +241,41 @@ export default function ClientsScreen() {
         </View>
       </View>
 
+      {/* Search Input */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputWrapper}>
+          <MaterialIcons
+            name="search"
+            size={20}
+            color={Colors.dark.placeholder}
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name or email"
+            placeholderTextColor={Colors.dark.placeholder}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <Pressable
+              onPress={() => setSearchQuery('')}
+              style={styles.clearButton}
+              hitSlop={8}
+            >
+              <MaterialIcons
+                name="close"
+                size={18}
+                color={Colors.dark.textSecondary}
+              />
+            </Pressable>
+          )}
+        </View>
+      </View>
+
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
         <FlatList
@@ -294,17 +350,21 @@ export default function ClientsScreen() {
       ) : (
         <View style={styles.emptyContainer}>
           <MaterialIcons
-            name="people-outline"
+            name={searchQuery ? 'search-off' : 'people-outline'}
             size={64}
             color={Colors.dark.textSecondary}
           />
-          <ThemedText style={styles.emptyTitle}>No clients yet</ThemedText>
-          <ThemedText style={styles.emptyText}>
-            {filterStatus === 'all'
-              ? 'Invite your first client to get started'
-              : `No ${filterStatus} clients`}
+          <ThemedText style={styles.emptyTitle}>
+            {searchQuery ? 'No results found' : 'No clients yet'}
           </ThemedText>
-          {filterStatus === 'all' && (
+          <ThemedText style={styles.emptyText}>
+            {searchQuery
+              ? `No clients matching "${searchQuery}"`
+              : filterStatus === 'all'
+                ? 'Invite your first client to get started'
+                : `No ${filterStatus} clients`}
+          </ThemedText>
+          {!searchQuery && filterStatus === 'all' && (
             <View style={styles.emptyButton}>
               <Button
                 title="Invite Client"
@@ -373,8 +433,31 @@ const styles = StyleSheet.create({
     color: Colors.dark.textSecondary,
     marginTop: 4,
   },
-  filterContainer: {
+  searchContainer: {
+    paddingHorizontal: 16,
     marginTop: 16,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 44,
+    fontSize: 16,
+    color: Colors.dark.text,
+  },
+  clearButton: {
+    padding: 4,
+  },
+  filterContainer: {
+    marginTop: 12,
   },
   filterList: {
     paddingHorizontal: 16,
