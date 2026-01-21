@@ -9,7 +9,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useAction, useQuery } from 'convex/react';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -23,7 +23,9 @@ import { Colors } from '@/constants/theme';
 
 export default function TrainerSubscriptionScreen() {
   const router = useRouter();
+  const { success, canceled } = useLocalSearchParams<{ success?: string; canceled?: string }>();
   const trainer = useQuery(api.trainers.currentTrainer);
+  const clientCount = useQuery(api.trainers.getClientCount);
   const createCheckoutSession = useAction(api.stripe.createCheckoutSession);
   const createBillingPortal = useAction(api.stripe.createBillingPortalSession);
   const subscriptionInfo = useAction(api.stripe.getSubscriptionInfo);
@@ -31,6 +33,8 @@ export default function TrainerSubscriptionScreen() {
   const [selectedTier, setSelectedTier] = useState<TierType>('starter');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [showCanceledMessage, setShowCanceledMessage] = useState(false);
   const [currentSubscription, setCurrentSubscription] = useState<{
     tier: string;
     status: string;
@@ -57,6 +61,32 @@ export default function TrainerSubscriptionScreen() {
       loadSubscriptionInfo();
     }
   }, [trainer, loadSubscriptionInfo]);
+
+  // Handle success/canceled URL params
+  useEffect(() => {
+    if (success === 'true') {
+      setShowSuccessMessage(true);
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      // Refresh subscription info after successful checkout
+      loadSubscriptionInfo();
+    } else if (canceled === 'true') {
+      setShowCanceledMessage(true);
+    }
+  }, [success, canceled, loadSubscriptionInfo]);
+
+  const dismissSuccessMessage = () => {
+    setShowSuccessMessage(false);
+    // Clear URL params
+    router.setParams({ success: undefined, canceled: undefined });
+  };
+
+  const dismissCanceledMessage = () => {
+    setShowCanceledMessage(false);
+    // Clear URL params
+    router.setParams({ success: undefined, canceled: undefined });
+  };
 
   const handleSelectTier = (tier: TierType) => {
     setSelectedTier(tier);
@@ -162,6 +192,9 @@ export default function TrainerSubscriptionScreen() {
 
   const currentTier = trainer.subscriptionTier as TierType;
   const hasActiveSubscription = currentTier !== 'starter' && trainer.subscriptionStatus === 'active';
+  const isPastDue = trainer.subscriptionStatus === 'past_due';
+  const isCanceled = trainer.subscriptionStatus === 'canceled';
+  const willCancel = currentSubscription?.subscription?.cancelAtPeriodEnd;
 
   return (
     <ThemedView style={styles.container}>
@@ -178,6 +211,61 @@ export default function TrainerSubscriptionScreen() {
           <ThemedText style={styles.closeButtonText}>Close</ThemedText>
         </Pressable>
 
+        {/* Success Message */}
+        {showSuccessMessage && (
+          <Pressable onPress={dismissSuccessMessage} style={styles.successBanner}>
+            <MaterialIcons name="check-circle" size={20} color="#10B981" />
+            <View style={styles.bannerContent}>
+              <ThemedText style={styles.successTitle}>Subscription Activated!</ThemedText>
+              <ThemedText style={styles.successText}>
+                Welcome to {trainer.subscriptionTier === 'pro' ? 'Pro' : 'Studio'}. Your plan is now active.
+              </ThemedText>
+            </View>
+            <MaterialIcons name="close" size={18} color={Colors.dark.textSecondary} />
+          </Pressable>
+        )}
+
+        {/* Canceled Message */}
+        {showCanceledMessage && (
+          <Pressable onPress={dismissCanceledMessage} style={styles.canceledBanner}>
+            <MaterialIcons name="info" size={20} color={Colors.dark.primary} />
+            <View style={styles.bannerContent}>
+              <ThemedText style={styles.canceledTitle}>Checkout Canceled</ThemedText>
+              <ThemedText style={styles.canceledText}>
+                No changes were made to your subscription.
+              </ThemedText>
+            </View>
+            <MaterialIcons name="close" size={18} color={Colors.dark.textSecondary} />
+          </Pressable>
+        )}
+
+        {/* Past Due Warning */}
+        {isPastDue && (
+          <View style={styles.warningBanner}>
+            <MaterialIcons name="warning" size={20} color="#EF4444" />
+            <View style={styles.bannerContent}>
+              <ThemedText style={styles.warningTitle}>Payment Past Due</ThemedText>
+              <ThemedText style={styles.warningText}>
+                Please update your payment method to avoid service interruption.
+              </ThemedText>
+            </View>
+          </View>
+        )}
+
+        {/* Cancellation Notice */}
+        {willCancel && !isCanceled && (
+          <View style={styles.noticeBanner}>
+            <MaterialIcons name="schedule" size={20} color="#F59E0B" />
+            <View style={styles.bannerContent}>
+              <ThemedText style={styles.noticeTitle}>Subscription Ending</ThemedText>
+              <ThemedText style={styles.noticeText}>
+                Your subscription will end on{' '}
+                {new Date(currentSubscription.subscription!.currentPeriodEnd * 1000).toLocaleDateString()}.
+              </ThemedText>
+            </View>
+          </View>
+        )}
+
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.iconContainer}>
@@ -188,6 +276,24 @@ export default function TrainerSubscriptionScreen() {
             Choose the plan that fits your training business
           </ThemedText>
         </View>
+
+        {/* Client Count */}
+        {clientCount && (
+          <View style={styles.clientCountCard}>
+            <MaterialIcons name="people" size={24} color={Colors.dark.primary} />
+            <View style={styles.clientCountInfo}>
+              <ThemedText style={styles.clientCountValue}>
+                {clientCount.active} / {clientCount.maxClients}
+              </ThemedText>
+              <ThemedText style={styles.clientCountLabel}>Active Clients</ThemedText>
+            </View>
+            {clientCount.active >= clientCount.maxClients && (
+              <View style={styles.limitBadge}>
+                <ThemedText style={styles.limitBadgeText}>At Limit</ThemedText>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Current Plan Badge */}
         {hasActiveSubscription && (
@@ -356,5 +462,117 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     opacity: 0.7,
     marginTop: 8,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10B981' + '20',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 12,
+  },
+  bannerContent: {
+    flex: 1,
+  },
+  successTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  successText: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  canceledBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.surface,
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 12,
+  },
+  canceledTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  canceledText: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EF4444' + '20',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 12,
+  },
+  warningTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  warningText: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  noticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F59E0B' + '20',
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 12,
+  },
+  noticeTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#F59E0B',
+  },
+  noticeText: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  clientCountCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.surface,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    gap: 14,
+  },
+  clientCountInfo: {
+    flex: 1,
+  },
+  clientCountValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.dark.text,
+  },
+  clientCountLabel: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  limitBadge: {
+    backgroundColor: '#F59E0B' + '20',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  limitBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F59E0B',
   },
 });

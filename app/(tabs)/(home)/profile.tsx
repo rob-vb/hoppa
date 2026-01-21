@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useQuery } from 'convex/react';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -9,12 +11,16 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { usePremium } from '@/hooks/use-premium';
 import { Colors } from '@/constants/theme';
+import { api } from '@/convex/_generated/api';
+import { TIERS, type TierType } from '@/components/ui/tier-selector';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const { isPremium, currentPlan, showPaywall } = usePremium();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const trainer = useQuery(api.trainers.currentTrainer);
+  const clientCount = useQuery(api.trainers.getClientCount);
 
   const handleLogout = async () => {
     if (Platform.OS === 'web') {
@@ -54,6 +60,13 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleManageTrainerSubscription = () => {
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    router.push('/trainer-subscription');
+  };
+
   const getInitials = (name?: string, email?: string) => {
     if (name) {
       return name
@@ -68,6 +81,9 @@ export default function ProfileScreen() {
     }
     return '?';
   };
+
+  const trainerTier = trainer?.subscriptionTier as TierType | undefined;
+  const isTrainerSubscriptionPastDue = trainer?.subscriptionStatus === 'past_due';
 
   return (
     <ThemedView style={styles.container}>
@@ -128,6 +144,62 @@ export default function ProfileScreen() {
             </Pressable>
           )}
         </View>
+
+        {/* Trainer Subscription Section */}
+        {trainer && (
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Trainer Plan</ThemedText>
+            <Pressable
+              onPress={handleManageTrainerSubscription}
+              style={({ pressed }) => [
+                styles.card,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.trainerPlanRow}>
+                <View style={styles.trainerPlanInfo}>
+                  <View style={styles.trainerPlanHeader}>
+                    <View
+                      style={[
+                        styles.trainerBadge,
+                        isTrainerSubscriptionPastDue && styles.trainerBadgePastDue,
+                      ]}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.trainerBadgeText,
+                          isTrainerSubscriptionPastDue && styles.trainerBadgeTextPastDue,
+                        ]}
+                      >
+                        {trainerTier?.toUpperCase() ?? 'STARTER'}
+                      </ThemedText>
+                    </View>
+                    {isTrainerSubscriptionPastDue && (
+                      <View style={styles.pastDueIndicator}>
+                        <MaterialIcons name="warning" size={16} color="#EF4444" />
+                        <ThemedText style={styles.pastDueText}>Past Due</ThemedText>
+                      </View>
+                    )}
+                  </View>
+                  <ThemedText style={styles.trainerPlanTitle}>
+                    {trainerTier ? TIERS[trainerTier].name : 'Starter'} Plan
+                  </ThemedText>
+                  <ThemedText style={styles.trainerPlanClients}>
+                    {clientCount?.active ?? 0} / {trainer.maxClients} clients
+                  </ThemedText>
+                </View>
+                <View style={styles.trainerPlanArrow}>
+                  <ThemedText style={styles.manageText}>Manage</ThemedText>
+                  <MaterialIcons
+                    name="chevron-right"
+                    size={20}
+                    color={Colors.dark.textSecondary}
+                  />
+                </View>
+              </View>
+            </Pressable>
+          </View>
+        )}
 
         {/* Account Section */}
         <View style={styles.section}>
@@ -324,5 +396,66 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: Colors.dark.primary,
     marginLeft: 12,
+  },
+  trainerPlanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  trainerPlanInfo: {
+    flex: 1,
+  },
+  trainerPlanHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  trainerBadge: {
+    backgroundColor: Colors.dark.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  trainerBadgePastDue: {
+    backgroundColor: '#EF4444' + '20',
+  },
+  trainerBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  trainerBadgeTextPastDue: {
+    color: '#EF4444',
+  },
+  pastDueIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  pastDueText: {
+    fontSize: 12,
+    color: '#EF4444',
+    fontWeight: '600',
+  },
+  trainerPlanTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  trainerPlanClients: {
+    fontSize: 14,
+    color: Colors.dark.textSecondary,
+    marginTop: 2,
+  },
+  trainerPlanArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  manageText: {
+    fontSize: 14,
+    color: Colors.dark.primary,
+    fontWeight: '500',
   },
 });
