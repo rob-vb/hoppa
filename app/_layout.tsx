@@ -9,6 +9,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 import { ConvexClientProvider } from '@/contexts/convex-provider';
 import { SyncProvider } from '@/contexts/sync-provider';
+import { SubscriptionProvider } from '@/contexts/subscription-context';
 
 function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -51,12 +52,14 @@ export default function RootLayout() {
   return (
     <ConvexClientProvider>
       <AuthProvider>
-        <SyncProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <RootLayoutNav />
-            <StatusBar style="auto" />
-          </ThemeProvider>
-        </SyncProvider>
+        <SubscriptionProvider>
+          <SyncProvider>
+            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+              <RootLayoutNav />
+              <StatusBar style="auto" />
+            </ThemeProvider>
+          </SyncProvider>
+        </SubscriptionProvider>
       </AuthProvider>
     </ConvexClientProvider>
   );

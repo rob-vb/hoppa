@@ -14,6 +14,12 @@ export default defineSchema({
     phone: v.optional(v.string()),
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
+    // Subscription fields
+    isPremium: v.optional(v.boolean()),
+    subscriptionPlan: v.optional(
+      v.union(v.literal("free"), v.literal("monthly"), v.literal("annual"))
+    ),
+    subscriptionExpiresAt: v.optional(v.number()),
   })
     .index("email", ["email"]),
 
