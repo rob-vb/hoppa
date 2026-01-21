@@ -20,6 +20,22 @@ jest.mock('expo-network', () => ({
     isInternetReachable: true,
     type: 'wifi',
   }),
+  NetworkStateType: {
+    NONE: 'none',
+    WIFI: 'wifi',
+    CELLULAR: 'cellular',
+    UNKNOWN: 'unknown',
+  },
+}));
+
+// Mock convex modules that may not be generated during tests
+jest.mock('convex/react', () => ({
+  ConvexReactClient: jest.fn(),
+}));
+
+jest.mock('convex/server', () => ({
+  FunctionReference: jest.fn(),
+  FunctionReturnType: jest.fn(),
 }));
 
 // Mock sync engine to avoid convex dependencies in tests
