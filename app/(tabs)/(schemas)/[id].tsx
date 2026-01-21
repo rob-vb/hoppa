@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Alert,
@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -19,6 +20,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { IncrementSelector } from '@/components/ui/increment-selector';
+import { DraggableList } from '@/components/ui/draggable-list';
 import { useSchemaStore } from '@/stores/schema-store';
 import { Colors } from '@/constants/theme';
 import { EquipmentType, Exercise, WorkoutDayWithExercises } from '@/db/types';
@@ -39,6 +41,7 @@ export default function SchemaDetailsScreen() {
     addWorkoutDay,
     updateWorkoutDay,
     deleteWorkoutDay,
+    reorderWorkoutDays,
     addExercise,
     updateExercise,
     deleteExercise,
@@ -120,47 +123,19 @@ export default function SchemaDetailsScreen() {
     }
   };
 
-  const handleMoveDayUp = async (dayId: string) => {
-    if (!currentSchema) return;
+  const handleReorderDays = useCallback(
+    async (reorderedDays: WorkoutDayWithExercises[]) => {
+      if (!currentSchema) return;
 
-    const index = currentSchema.days.findIndex((d) => d.id === dayId);
-    if (index <= 0) return;
-
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    try {
-      const prevDay = currentSchema.days[index - 1];
-      const currDay = currentSchema.days[index];
-      await updateWorkoutDay(prevDay.id, { orderIndex: index });
-      await updateWorkoutDay(currDay.id, { orderIndex: index - 1 });
-      await loadSchemaWithDays(currentSchema.id);
-    } catch {
-      Alert.alert('Error', 'Failed to reorder days');
-    }
-  };
-
-  const handleMoveDayDown = async (dayId: string) => {
-    if (!currentSchema) return;
-
-    const index = currentSchema.days.findIndex((d) => d.id === dayId);
-    if (index < 0 || index >= currentSchema.days.length - 1) return;
-
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    try {
-      const nextDay = currentSchema.days[index + 1];
-      const currDay = currentSchema.days[index];
-      await updateWorkoutDay(currDay.id, { orderIndex: index + 1 });
-      await updateWorkoutDay(nextDay.id, { orderIndex: index });
-      await loadSchemaWithDays(currentSchema.id);
-    } catch {
-      Alert.alert('Error', 'Failed to reorder days');
-    }
-  };
+      try {
+        const dayIds = reorderedDays.map((d) => d.id);
+        await reorderWorkoutDays(dayIds);
+      } catch {
+        Alert.alert('Error', 'Failed to reorder days');
+      }
+    },
+    [currentSchema, reorderWorkoutDays]
+  );
 
   const handleAddExercise = async (dayId: string) => {
     if (Platform.OS === 'ios') {
@@ -513,44 +488,14 @@ export default function SchemaDetailsScreen() {
     );
   };
 
-  const renderDay = (day: WorkoutDayWithExercises, index: number) => {
+  const renderDay = (day: WorkoutDayWithExercises, index: number, isDragging: boolean) => {
     const isExpanded = expandedDays.has(day.id);
 
     return (
-      <Card key={day.id} style={styles.dayCard}>
+      <Card style={[styles.dayCard, isDragging && styles.dayCardDragging]}>
         <View style={styles.dayHeader}>
-          <View style={styles.reorderButtons}>
-            <Pressable
-              onPress={() => handleMoveDayUp(day.id)}
-              hitSlop={8}
-              style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
-              disabled={index === 0}
-            >
-              <IconSymbol
-                name="chevron.up"
-                size={16}
-                color={index === 0 ? Colors.dark.border : Colors.dark.icon}
-              />
-            </Pressable>
-            <Pressable
-              onPress={() => handleMoveDayDown(day.id)}
-              hitSlop={8}
-              style={[
-                styles.reorderButton,
-                index === (currentSchema?.days.length ?? 0) - 1 && styles.reorderButtonDisabled,
-              ]}
-              disabled={index === (currentSchema?.days.length ?? 0) - 1}
-            >
-              <IconSymbol
-                name="chevron.down"
-                size={16}
-                color={
-                  index === (currentSchema?.days.length ?? 0) - 1
-                    ? Colors.dark.border
-                    : Colors.dark.icon
-                }
-              />
-            </Pressable>
+          <View style={styles.dragHandle}>
+            <IconSymbol name="line.3.horizontal" size={18} color={Colors.dark.icon} />
           </View>
 
           <Pressable onPress={() => toggleDay(day.id)} style={styles.dayHeaderMain}>
@@ -614,95 +559,120 @@ export default function SchemaDetailsScreen() {
 
   if (isLoading && !currentSchema) {
     return (
-      <ThemedView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ThemedText>Loading...</ThemedText>
-        </View>
-      </ThemedView>
+      <GestureHandlerRootView style={styles.gestureRoot}>
+        <ThemedView style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <ThemedText>Loading...</ThemedText>
+          </View>
+        </ThemedView>
+      </GestureHandlerRootView>
     );
   }
 
   if (!currentSchema) {
     return (
-      <ThemedView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ThemedText>Schema not found</ThemedText>
-          <Button title="Go Back" onPress={() => router.back()} />
-        </View>
-      </ThemedView>
+      <GestureHandlerRootView style={styles.gestureRoot}>
+        <ThemedView style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <ThemedText>Schema not found</ThemedText>
+            <Button title="Go Back" onPress={() => router.back()} />
+          </View>
+        </ThemedView>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={100}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <ThemedView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+          keyboardVerticalOffset={100}
         >
-          <View style={styles.section}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Schema Details
-            </ThemedText>
-            <Input
-              label="Name"
-              placeholder="e.g., Push/Pull/Legs"
-              value={currentSchema.name}
-              onChangeText={(text) => updateSchema(currentSchema.id, { name: text })}
-            />
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.section}>
+              <ThemedText type="subtitle" style={styles.sectionTitle}>
+                Schema Details
+              </ThemedText>
+              <Input
+                label="Name"
+                placeholder="e.g., Push/Pull/Legs"
+                value={currentSchema.name}
+                onChangeText={(text) => updateSchema(currentSchema.id, { name: text })}
+              />
 
-            <View style={styles.switchRow}>
-              <View style={styles.switchLabelContainer}>
-                <ThemedText style={styles.switchLabel}>Progressive Overload</ThemedText>
-                <ThemedText style={styles.switchHint}>
-                  Automatically increase weights when you hit your rep targets
-                </ThemedText>
+              <View style={styles.switchRow}>
+                <View style={styles.switchLabelContainer}>
+                  <ThemedText style={styles.switchLabel}>Progressive Overload</ThemedText>
+                  <ThemedText style={styles.switchHint}>
+                    Automatically increase weights when you hit your rep targets
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={currentSchema.progressiveLoadingEnabled}
+                  onValueChange={(value) =>
+                    updateSchema(currentSchema.id, { progressiveLoadingEnabled: value })
+                  }
+                  trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+                  thumbColor="#FFFFFF"
+                />
               </View>
-              <Switch
-                value={currentSchema.progressiveLoadingEnabled}
-                onValueChange={(value) =>
-                  updateSchema(currentSchema.id, { progressiveLoadingEnabled: value })
-                }
-                trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
-                thumbColor="#FFFFFF"
+            </View>
+
+            <View style={styles.section}>
+              <ThemedText type="subtitle" style={styles.sectionTitle}>
+                Workout Days
+              </ThemedText>
+
+              {currentSchema.days.length === 0 && (
+                <ThemedText style={styles.noExercisesText}>
+                  No workout days yet. Add your first day below.
+                </ThemedText>
+              )}
+
+              {currentSchema.days.length > 0 && (
+                <View style={styles.dayListHint}>
+                  <IconSymbol name="hand.draw" size={14} color={Colors.dark.textSecondary} />
+                  <ThemedText style={styles.dayListHintText}>
+                    Hold and drag to reorder days
+                  </ThemedText>
+                </View>
+              )}
+
+              <DraggableList
+                items={currentSchema.days}
+                keyExtractor={(day) => day.id}
+                renderItem={renderDay}
+                onReorder={handleReorderDays}
+                itemHeight={80}
+                style={styles.dayList}
+              />
+
+              <Button
+                title="Add Workout Day"
+                variant="secondary"
+                onPress={handleAddDay}
+                fullWidth
               />
             </View>
-          </View>
-
-          <View style={styles.section}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Workout Days
-            </ThemedText>
-
-            {currentSchema.days.length === 0 && (
-              <ThemedText style={styles.noExercisesText}>
-                No workout days yet. Add your first day below.
-              </ThemedText>
-            )}
-
-            {currentSchema.days.map((day, index) => renderDay(day, index))}
-
-            <Button
-              title="Add Workout Day"
-              variant="secondary"
-              onPress={handleAddDay}
-              fullWidth
-            />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </ThemedView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </ThemedView>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },
@@ -747,10 +717,28 @@ const styles = StyleSheet.create({
     color: Colors.dark.textSecondary,
     marginTop: 2,
   },
+  dayList: {
+    gap: 12,
+  },
+  dayListHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  dayListHintText: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+  },
   dayCard: {
     gap: 0,
     padding: 0,
     overflow: 'hidden',
+    marginBottom: 12,
+  },
+  dayCardDragging: {
+    borderColor: Colors.dark.primary,
+    borderWidth: 2,
   },
   dayHeader: {
     flexDirection: 'row',
@@ -758,15 +746,8 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  reorderButtons: {
-    flexDirection: 'column',
-    gap: 2,
-  },
-  reorderButton: {
+  dragHandle: {
     padding: 4,
-  },
-  reorderButtonDisabled: {
-    opacity: 0.3,
   },
   dayHeaderMain: {
     flex: 1,
@@ -823,6 +804,9 @@ const styles = StyleSheet.create({
   },
   exerciseReorderButton: {
     padding: 2,
+  },
+  reorderButtonDisabled: {
+    opacity: 0.3,
   },
   exerciseTitleRow: {
     flex: 1,

@@ -35,6 +35,7 @@ interface SchemaActions {
     updates: Partial<Pick<WorkoutDay, 'name' | 'orderIndex'>>
   ) => Promise<void>;
   deleteWorkoutDay: (id: string) => Promise<void>;
+  reorderWorkoutDays: (dayIds: string[]) => Promise<void>;
 
   // Exercise operations
   addExercise: (dayId: string, exercise: Omit<Exercise, 'id' | 'dayId' | 'orderIndex' | 'updatedAt'>) => Promise<Exercise>;
@@ -259,6 +260,45 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to delete workout day',
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  reorderWorkoutDays: async (dayIds: string[]) => {
+    set({ isLoading: true, error: null });
+    try {
+      // Update each day's orderIndex in the database
+      for (let i = 0; i < dayIds.length; i++) {
+        await db.updateWorkoutDay(dayIds[i], { orderIndex: i });
+        await syncEngine.queueUpdate('workoutDay', dayIds[i], { orderIndex: i });
+      }
+
+      // Reorder days in local state
+      set((state) => {
+        if (state.currentSchema) {
+          const dayMap = new Map(state.currentSchema.days.map((d) => [d.id, d]));
+          const reorderedDays = dayIds
+            .map((id, index) => {
+              const day = dayMap.get(id);
+              return day ? { ...day, orderIndex: index } : null;
+            })
+            .filter((d): d is WorkoutDayWithExercises => d !== null);
+
+          return {
+            currentSchema: {
+              ...state.currentSchema,
+              days: reorderedDays,
+            },
+            isLoading: false,
+          };
+        }
+        return { isLoading: false };
+      });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to reorder workout days',
         isLoading: false,
       });
       throw error;
