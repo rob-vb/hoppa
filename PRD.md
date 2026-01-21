@@ -148,25 +148,25 @@
 - [x] Set up Tailwind CSS
 - [x] Configure Convex for web
 - [x] Implement trainer authentication
-- [ ] Build basic layout (sidebar, header)
-- [ ] Create landing page
+- [x] Build basic layout (sidebar, header)
+- [x] Create landing page
 
 #### Trainer Onboarding (1 week)
-- [ ] Build trainer registration flow
-- [ ] Create trainers table in Convex
-- [ ] Integrate Stripe for subscriptions
-- [ ] Implement tier selection (Starter/Pro/Studio)
-- [ ] Build subscription management UI
-- [ ] Handle upgrade/downgrade flows
+- [x] Build trainer registration flow
+- [x] Create trainers table in Convex
+- [x] Integrate Stripe for subscriptions
+- [x] Implement tier selection (Starter/Pro/Studio)
+- [x] Build subscription management UI
+- [x] Handle upgrade/downgrade flows
 
 #### Client Management (1.5 weeks)
-- [ ] Build client invitation system (email)
-- [ ] Create trainerClients table in Convex
-- [ ] Generate invite tokens
-- [ ] Build invite acceptance flow in mobile app
-- [ ] Create client list view with status indicators
-- [ ] Implement client states (invited, active, paused, archived)
-- [ ] Build client card component
+- [x] Build client invitation system (email)
+- [x] Create trainerClients table in Convex
+- [x] Generate invite tokens
+- [x] Build invite acceptance flow in mobile app
+- [x] Create client list view with status indicators
+- [x] Implement client states (invited, active, paused, archived)
+- [x] Build client card component
 - [ ] Add client search and filtering
 
 #### Schema Builder - Web (2 weeks)
