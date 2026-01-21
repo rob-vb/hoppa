@@ -23,12 +23,14 @@ interface ExerciseSelectorModalProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (exercise: ExerciseTemplate) => void;
+  onCreateCustom?: () => void;
 }
 
 export function ExerciseSelectorModal({
   visible,
   onClose,
   onSelect,
+  onCreateCustom,
 }: ExerciseSelectorModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
@@ -225,6 +227,33 @@ export function ExerciseSelectorModal({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {onCreateCustom && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.createCustomButton,
+                pressed && styles.createCustomButtonPressed,
+              ]}
+              onPress={() => {
+                if (Platform.OS === 'ios') {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+                onCreateCustom();
+              }}
+            >
+              <View style={styles.createCustomLeft}>
+                <IconSymbol name="plus.circle.fill" size={24} color={Colors.dark.primary} />
+                <View>
+                  <ThemedText type="defaultSemiBold" style={styles.createCustomTitle}>
+                    Create Custom Exercise
+                  </ThemedText>
+                  <ThemedText style={styles.createCustomSubtitle}>
+                    Add an exercise not in the library
+                  </ThemedText>
+                </View>
+              </View>
+              <IconSymbol name="chevron.right" size={16} color={Colors.dark.icon} />
+            </Pressable>
+          )}
           {searchQuery.trim() ? renderSearchResults() : renderCategories()}
         </ScrollView>
       </View>
@@ -276,6 +305,34 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingBottom: 40,
+  },
+  createCustomButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.primary + '40',
+    borderStyle: 'dashed',
+  },
+  createCustomButtonPressed: {
+    backgroundColor: Colors.dark.border,
+  },
+  createCustomLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  createCustomTitle: {
+    fontSize: 16,
+  },
+  createCustomSubtitle: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
   },
   emptyState: {
     alignItems: 'center',

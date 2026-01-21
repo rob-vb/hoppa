@@ -21,9 +21,11 @@ import { Input } from '@/components/ui/input';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { IncrementSelector } from '@/components/ui/increment-selector';
 import { DraggableList } from '@/components/ui/draggable-list';
+import { ExerciseSelectorModal } from '@/components/ui/exercise-selector-modal';
 import { useSchemaStore } from '@/stores/schema-store';
 import { Colors } from '@/constants/theme';
 import { EquipmentType, Exercise, WorkoutDayWithExercises } from '@/db/types';
+import type { ExerciseTemplate } from '@/constants/exercise-library';
 
 const EQUIPMENT_TYPES: { value: EquipmentType; label: string }[] = [
   { value: 'plates', label: 'Barbell/Plates' },
@@ -45,12 +47,15 @@ export default function SchemaDetailsScreen() {
     addExercise,
     updateExercise,
     deleteExercise,
+    reorderExercises,
     isLoading,
     clearCurrentSchema,
   } = useSchemaStore();
 
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [editingExercise, setEditingExercise] = useState<string | null>(null);
+  const [exerciseSelectorVisible, setExerciseSelectorVisible] = useState(false);
+  const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -137,13 +142,46 @@ export default function SchemaDetailsScreen() {
     [currentSchema, reorderWorkoutDays]
   );
 
-  const handleAddExercise = async (dayId: string) => {
+  const handleAddExercise = (dayId: string) => {
+    if (Platform.OS === 'ios') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setSelectedDayId(dayId);
+    setExerciseSelectorVisible(true);
+  };
+
+  const handleSelectExercise = async (template: ExerciseTemplate) => {
+    if (!selectedDayId) return;
+
+    try {
+      const exercise = await addExercise(selectedDayId, {
+        name: template.name,
+        equipmentType: template.equipmentType,
+        baseWeight: template.defaultWeight,
+        targetSets: template.defaultSets,
+        targetRepsMin: template.defaultRepsMin,
+        targetRepsMax: template.defaultRepsMax,
+        progressiveLoadingEnabled: true,
+        progressionIncrement: template.defaultProgressionIncrement,
+        currentWeight: template.defaultWeight,
+      });
+      setEditingExercise(exercise.id);
+    } catch {
+      Alert.alert('Error', 'Failed to add exercise');
+    }
+  };
+
+  const handleAddCustomExercise = async () => {
+    if (!selectedDayId) return;
+
+    setExerciseSelectorVisible(false);
+
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
     try {
-      const exercise = await addExercise(dayId, {
+      const exercise = await addExercise(selectedDayId, {
         name: 'New Exercise',
         equipmentType: 'plates',
         baseWeight: 0,
@@ -221,96 +259,26 @@ export default function SchemaDetailsScreen() {
     }
   };
 
-  const handleMoveExerciseUp = async (dayId: string, exerciseId: string) => {
-    if (!currentSchema) return;
+  const handleReorderExercises = useCallback(
+    async (dayId: string, reorderedExercises: Exercise[]) => {
+      try {
+        const exerciseIds = reorderedExercises.map((e) => e.id);
+        await reorderExercises(dayId, exerciseIds);
+      } catch {
+        Alert.alert('Error', 'Failed to reorder exercises');
+      }
+    },
+    [reorderExercises]
+  );
 
-    const day = currentSchema.days.find((d) => d.id === dayId);
-    if (!day) return;
-
-    const index = day.exercises.findIndex((e) => e.id === exerciseId);
-    if (index <= 0) return;
-
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    try {
-      const prevExercise = day.exercises[index - 1];
-      const currExercise = day.exercises[index];
-      await updateExercise(prevExercise.id, { orderIndex: index });
-      await updateExercise(currExercise.id, { orderIndex: index - 1 });
-      await loadSchemaWithDays(currentSchema.id);
-    } catch {
-      Alert.alert('Error', 'Failed to reorder exercises');
-    }
-  };
-
-  const handleMoveExerciseDown = async (dayId: string, exerciseId: string) => {
-    if (!currentSchema) return;
-
-    const day = currentSchema.days.find((d) => d.id === dayId);
-    if (!day) return;
-
-    const index = day.exercises.findIndex((e) => e.id === exerciseId);
-    if (index < 0 || index >= day.exercises.length - 1) return;
-
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    try {
-      const nextExercise = day.exercises[index + 1];
-      const currExercise = day.exercises[index];
-      await updateExercise(currExercise.id, { orderIndex: index + 1 });
-      await updateExercise(nextExercise.id, { orderIndex: index });
-      await loadSchemaWithDays(currentSchema.id);
-    } catch {
-      Alert.alert('Error', 'Failed to reorder exercises');
-    }
-  };
-
-  const renderExercise = (
-    dayId: string,
-    exercise: Exercise,
-    index: number,
-    totalExercises: number
-  ) => {
+  const renderExercise = (exercise: Exercise, index: number, isDragging: boolean) => {
     const isEditing = editingExercise === exercise.id;
 
     return (
-      <View key={exercise.id} style={styles.exerciseContainer}>
+      <View style={[styles.exerciseContainer, isDragging && styles.exerciseContainerDragging]}>
         <View style={styles.exerciseHeader}>
-          <View style={styles.exerciseReorderButtons}>
-            <Pressable
-              onPress={() => handleMoveExerciseUp(dayId, exercise.id)}
-              hitSlop={8}
-              style={[
-                styles.exerciseReorderButton,
-                index === 0 && styles.reorderButtonDisabled,
-              ]}
-              disabled={index === 0}
-            >
-              <IconSymbol
-                name="chevron.up"
-                size={14}
-                color={index === 0 ? Colors.dark.border : Colors.dark.icon}
-              />
-            </Pressable>
-            <Pressable
-              onPress={() => handleMoveExerciseDown(dayId, exercise.id)}
-              hitSlop={8}
-              style={[
-                styles.exerciseReorderButton,
-                index === totalExercises - 1 && styles.reorderButtonDisabled,
-              ]}
-              disabled={index === totalExercises - 1}
-            >
-              <IconSymbol
-                name="chevron.down"
-                size={14}
-                color={index === totalExercises - 1 ? Colors.dark.border : Colors.dark.icon}
-              />
-            </Pressable>
+          <View style={styles.exerciseDragHandle}>
+            <IconSymbol name="line.3.horizontal" size={16} color={Colors.dark.icon} />
           </View>
 
           <Pressable
@@ -541,8 +509,24 @@ export default function SchemaDetailsScreen() {
               </ThemedText>
             )}
 
-            {day.exercises.map((exercise, exerciseIndex) =>
-              renderExercise(day.id, exercise, exerciseIndex, day.exercises.length)
+            {day.exercises.length > 1 && (
+              <View style={styles.exerciseListHint}>
+                <IconSymbol name="hand.draw" size={14} color={Colors.dark.textSecondary} />
+                <ThemedText style={styles.exerciseListHintText}>
+                  Hold and drag to reorder exercises
+                </ThemedText>
+              </View>
+            )}
+
+            {day.exercises.length > 0 && (
+              <DraggableList
+                items={day.exercises}
+                keyExtractor={(exercise) => exercise.id}
+                renderItem={renderExercise}
+                onReorder={(reordered) => handleReorderExercises(day.id, reordered)}
+                itemHeight={60}
+                style={styles.exerciseList}
+              />
             )}
 
             <Button
@@ -664,6 +648,16 @@ export default function SchemaDetailsScreen() {
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
+
+        <ExerciseSelectorModal
+          visible={exerciseSelectorVisible}
+          onClose={() => {
+            setExerciseSelectorVisible(false);
+            setSelectedDayId(null);
+          }}
+          onSelect={handleSelectExercise}
+          onCreateCustom={handleAddCustomExercise}
+        />
       </ThemedView>
     </GestureHandlerRootView>
   );
@@ -787,26 +781,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 16,
   },
+  exerciseList: {
+    gap: 8,
+  },
+  exerciseListHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  exerciseListHintText: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+  },
   exerciseContainer: {
     backgroundColor: Colors.dark.background,
     borderRadius: 12,
     padding: 12,
     gap: 12,
   },
+  exerciseContainerDragging: {
+    borderColor: Colors.dark.primary,
+    borderWidth: 2,
+  },
   exerciseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  exerciseReorderButtons: {
-    flexDirection: 'column',
-    gap: 0,
-  },
-  exerciseReorderButton: {
-    padding: 2,
-  },
-  reorderButtonDisabled: {
-    opacity: 0.3,
+  exerciseDragHandle: {
+    padding: 4,
   },
   exerciseTitleRow: {
     flex: 1,

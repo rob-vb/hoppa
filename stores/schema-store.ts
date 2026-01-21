@@ -44,6 +44,7 @@ interface SchemaActions {
     updates: Partial<Omit<Exercise, 'id' | 'dayId'>>
   ) => Promise<void>;
   deleteExercise: (id: string) => Promise<void>;
+  reorderExercises: (dayId: string, exerciseIds: string[]) => Promise<void>;
 
   // Utility
   clearError: () => void;
@@ -423,6 +424,49 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to delete exercise',
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  reorderExercises: async (dayId: string, exerciseIds: string[]) => {
+    set({ isLoading: true, error: null });
+    try {
+      // Update each exercise's orderIndex in the database
+      for (let i = 0; i < exerciseIds.length; i++) {
+        await db.updateExercise(exerciseIds[i], { orderIndex: i });
+        await syncEngine.queueUpdate('exercise', exerciseIds[i], { orderIndex: i });
+      }
+
+      // Reorder exercises in local state
+      set((state) => {
+        if (state.currentSchema) {
+          return {
+            currentSchema: {
+              ...state.currentSchema,
+              days: state.currentSchema.days.map((d) => {
+                if (d.id !== dayId) return d;
+
+                const exerciseMap = new Map(d.exercises.map((e) => [e.id, e]));
+                const reorderedExercises = exerciseIds
+                  .map((id, index) => {
+                    const exercise = exerciseMap.get(id);
+                    return exercise ? { ...exercise, orderIndex: index } : null;
+                  })
+                  .filter((e): e is Exercise => e !== null);
+
+                return { ...d, exercises: reorderedExercises };
+              }),
+            },
+            isLoading: false,
+          };
+        }
+        return { isLoading: false };
+      });
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : 'Failed to reorder exercises',
         isLoading: false,
       });
       throw error;
