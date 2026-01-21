@@ -26,11 +26,10 @@ export const RepInput = memo(function RepInput({
   const isCompleted = completedReps !== null;
 
   // Parse target reps to get quick button values - memoize to avoid recalculation
-  const { minReps, maxReps, quickButtons } = useMemo(() => {
+  const { minReps, quickButtons } = useMemo(() => {
     const [min, max] = targetReps.split('-').map(Number);
     return {
       minReps: min,
-      maxReps: max,
       quickButtons: generateQuickButtons(min, max),
     };
   }, [targetReps]);

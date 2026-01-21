@@ -45,6 +45,7 @@ const createExercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   progressionIncrement: 2.5,
   currentWeight: 60,
   orderIndex: 0,
+  updatedAt: Date.now(),
   ...overrides,
 });
 
@@ -53,6 +54,7 @@ const createWorkoutDay = (overrides: Partial<WorkoutDayWithExercises> = {}): Wor
   schemaId: 'schema-1',
   name: 'Day A',
   orderIndex: 0,
+  updatedAt: Date.now(),
   exercises: [createExercise()],
   ...overrides,
 });
@@ -75,6 +77,7 @@ const createExerciseLog = (overrides: Partial<ExerciseLog> = {}): ExerciseLog =>
   microplateUsed: 0,
   totalWeight: 60,
   progressionEarned: false,
+  updatedAt: Date.now(),
   ...overrides,
 });
 
@@ -84,6 +87,7 @@ const createSetLog = (setNumber: number, completedReps: number | null = null): S
   setNumber,
   targetReps: '5-7',
   completedReps,
+  updatedAt: Date.now(),
 });
 
 const createExerciseLogWithDetails = (
@@ -314,9 +318,9 @@ describe('workout-store', () => {
       });
 
       expect(result).not.toBe(null);
-      expect(result?.completedExercises).toBe(1);
-      expect(result?.totalSetsCompleted).toBe(2);
-      expect(result?.totalReps).toBe(13);
+      expect(result!.completedExercises).toBe(1);
+      expect(result!.totalSetsCompleted).toBe(2);
+      expect(result!.totalReps).toBe(13);
     });
   });
 

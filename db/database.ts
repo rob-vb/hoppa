@@ -353,7 +353,7 @@ export async function deleteWorkoutDay(id: string): Promise<void> {
 // Exercise Operations
 // ============================================
 
-export async function createExercise(exercise: Omit<Exercise, 'id' | 'updatedAt'> & { orderIndex?: number }): Promise<Exercise> {
+export async function createExercise(exercise: Omit<Exercise, 'id' | 'updatedAt' | 'orderIndex'> & { orderIndex?: number }): Promise<Exercise> {
   const database = await getDatabase();
   const id = generateId();
   const now = Date.now();

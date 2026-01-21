@@ -213,6 +213,7 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
 
   // Setup listener for customer info updates (subscription changes, renewals, expirations)
   setupCustomerInfoListener: () => {
+    // Note: The library types say void but runtime returns { remove: () => void }
     const listener = Purchases.addCustomerInfoUpdateListener((customerInfo) => {
       const isPremium =
         typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== 'undefined';
@@ -223,7 +224,7 @@ export const useSubscriptionStore = create<SubscriptionStore>((set, get) => ({
         isPremium,
         currentPlan,
       });
-    });
+    }) as unknown as { remove: () => void };
 
     // Return cleanup function
     return () => {

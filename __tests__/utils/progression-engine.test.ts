@@ -36,6 +36,7 @@ const createExercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   progressionIncrement: 2.5,
   currentWeight: 60,
   orderIndex: 0,
+  updatedAt: Date.now(),
   ...overrides,
 });
 
@@ -49,6 +50,7 @@ const createSetLog = (
   setNumber,
   targetReps: '5-7',
   completedReps,
+  updatedAt: Date.now(),
   ...overrides,
 });
 

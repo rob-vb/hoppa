@@ -133,10 +133,10 @@
 - [x] Handle subscription expiration/renewal
 
 #### Testing & Polish (1 week)
-- [ ] Test offline scenarios
-- [ ] Test sync edge cases
-- [ ] Test subscription flows
-- [ ] Performance optimization
+- [x] Test offline scenarios
+- [x] Test sync edge cases
+- [x] Test subscription flows
+- [x] Performance optimization
 - [ ] Bug fixes
 
 ---

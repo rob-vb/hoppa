@@ -23,6 +23,7 @@ const createWorkoutDay = (overrides: Partial<WorkoutDay> = {}): WorkoutDay => ({
   schemaId: 'schema-1',
   name: 'Day A',
   orderIndex: 0,
+  updatedAt: Date.now(),
   ...overrides,
 });
 
@@ -39,6 +40,7 @@ const createExercise = (overrides: Partial<Exercise> = {}): Exercise => ({
   progressionIncrement: 2.5,
   currentWeight: 60,
   orderIndex: 0,
+  updatedAt: Date.now(),
   ...overrides,
 });
 

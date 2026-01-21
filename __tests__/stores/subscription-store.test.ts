@@ -14,7 +14,14 @@ jest.mock('react-native-purchases', () => ({
   getOfferings: jest.fn(),
   purchasePackage: jest.fn(),
   restorePurchases: jest.fn(),
-  addCustomerInfoUpdateListener: jest.fn(() => ({ remove: jest.fn() })),
+  // The type definition says void but runtime returns { remove: () => void }
+  addCustomerInfoUpdateListener: jest.fn(() => ({ remove: jest.fn() })) as jest.Mock,
+  VERIFICATION_RESULT: {
+    NOT_REQUESTED: 'NOT_REQUESTED',
+    VERIFIED: 'VERIFIED',
+    FAILED: 'FAILED',
+    VERIFIED_ON_DEVICE: 'VERIFIED_ON_DEVICE',
+  },
 }));
 
 // Mock react-native Platform
@@ -33,7 +40,8 @@ jest.mock('react-native', () => ({
 const originalEnv = process.env;
 
 // Helper to create mock CustomerInfo
-function createMockCustomerInfo(overrides: Partial<CustomerInfo> = {}): CustomerInfo {
+// Note: Using 'unknown' cast to bypass VERIFICATION_RESULT enum type checking in tests
+function createMockCustomerInfo(overrides: Record<string, unknown> = {}): CustomerInfo {
   return {
     entitlements: {
       active: {},
@@ -53,7 +61,7 @@ function createMockCustomerInfo(overrides: Partial<CustomerInfo> = {}): Customer
     nonSubscriptionTransactions: [],
     originalPurchaseDate: null,
     ...overrides,
-  } as CustomerInfo;
+  } as unknown as CustomerInfo;
 }
 
 // Helper to create mock CustomerInfo with premium entitlement
@@ -117,6 +125,12 @@ function createMockPackage(
       subscriptionOptions: [],
       presentedOfferingIdentifier: 'default',
       presentedOfferingContext: null,
+      pricePerWeek: null,
+      pricePerMonth: 4.99,
+      pricePerYear: null,
+      pricePerWeekString: null,
+      pricePerMonthString: '$4.99',
+      pricePerYearString: null,
     },
     presentedOfferingContext: {
       offeringIdentifier: 'default',
@@ -297,6 +311,11 @@ describe('subscription-store', () => {
       mockedPurchases.purchasePackage.mockResolvedValue({
         customerInfo: mockCustomerInfo,
         productIdentifier: 'hoppa_monthly',
+        transaction: {
+          transactionIdentifier: 'txn_123',
+          productIdentifier: 'hoppa_monthly',
+          purchaseDate: new Date().toISOString(),
+        },
       });
 
       let result: boolean = false;
@@ -412,7 +431,7 @@ describe('subscription-store', () => {
 
     it('should return cleanup function', () => {
       const mockRemove = jest.fn();
-      mockedPurchases.addCustomerInfoUpdateListener.mockReturnValue({
+      (mockedPurchases.addCustomerInfoUpdateListener as jest.Mock).mockReturnValue({
         remove: mockRemove,
       });
 

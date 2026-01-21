@@ -54,6 +54,14 @@ export interface SyncQueueItem {
   lastError?: string;
 }
 
+export const MAX_RETRY_COUNT = 5;
+
+export interface FailedSyncItem {
+  item: SyncQueueItem;
+  failedAt: number;
+  reason: string;
+}
+
 export interface IdMapping {
   localId: string;
   convexId: string;
@@ -66,6 +74,10 @@ export interface SyncState {
   lastSyncAt: number | null;
   pendingOperations: number;
   error: string | null;
+  /** Number of permanently failed operations (exceeded max retries) */
+  failedOperations: number;
+  /** Storage errors that could lead to data loss */
+  storageError: string | null;
 }
 
 export interface SyncResult {
@@ -111,8 +123,11 @@ export function resolveConflict(localUpdatedAt: number, remoteUpdatedAt: number)
 
 class SyncQueue {
   private queue: SyncQueueItem[] = [];
+  private failedItems: FailedSyncItem[] = [];
   private storageKey = 'hoppa_sync_queue';
+  private failedStorageKey = 'hoppa_sync_failed';
   private isLoaded = false;
+  private lastStorageError: string | null = null;
 
   async load(): Promise<void> {
     if (this.isLoaded) return;
@@ -123,10 +138,23 @@ class SyncQueue {
       } else {
         this.queue = [];
       }
+
+      // Load failed items
+      const failedStored = await SecureStore.getItemAsync(this.failedStorageKey);
+      if (failedStored) {
+        this.failedItems = JSON.parse(failedStored);
+      } else {
+        this.failedItems = [];
+      }
+
       this.isLoaded = true;
+      this.lastStorageError = null;
     } catch (error) {
-      console.warn('[SyncQueue] Failed to load queue from storage:', error);
+      const message = error instanceof Error ? error.message : 'Unknown storage error';
+      console.error('[SyncQueue] Failed to load queue from storage:', error);
+      this.lastStorageError = `Failed to load queue: ${message}`;
       this.queue = [];
+      this.failedItems = [];
       this.isLoaded = true;
     }
   }
@@ -134,9 +162,25 @@ class SyncQueue {
   async save(): Promise<void> {
     try {
       await SecureStore.setItemAsync(this.storageKey, JSON.stringify(this.queue));
+      this.lastStorageError = null;
     } catch (error) {
-      console.warn('[SyncQueue] Failed to save queue to storage:', error);
+      const message = error instanceof Error ? error.message : 'Unknown storage error';
+      console.error('[SyncQueue] Failed to save queue to storage:', error);
+      this.lastStorageError = `Failed to save queue: ${message}. Offline changes may be lost.`;
+      throw new Error(this.lastStorageError);
     }
+  }
+
+  private async saveFailed(): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(this.failedStorageKey, JSON.stringify(this.failedItems));
+    } catch (error) {
+      console.error('[SyncQueue] Failed to save failed items:', error);
+    }
+  }
+
+  getStorageError(): string | null {
+    return this.lastStorageError;
   }
 
   async add(item: Omit<SyncQueueItem, 'id' | 'timestamp' | 'retryCount'>): Promise<void> {
@@ -169,22 +213,70 @@ class SyncQueue {
     await this.save();
   }
 
-  async markFailed(id: string, error: string): Promise<void> {
+  async markFailed(id: string, error: string): Promise<{ permanentlyFailed: boolean }> {
     const item = this.queue.find((q) => q.id === id);
     if (item) {
       item.retryCount++;
       item.lastError = error;
+
+      // If max retries exceeded, move to failed items
+      if (item.retryCount >= MAX_RETRY_COUNT) {
+        const failedItem: FailedSyncItem = {
+          item: { ...item },
+          failedAt: Date.now(),
+          reason: `Exceeded max retries (${MAX_RETRY_COUNT}). Last error: ${error}`,
+        };
+        this.failedItems.push(failedItem);
+        this.queue = this.queue.filter((q) => q.id !== id);
+
+        await this.save();
+        await this.saveFailed();
+
+        console.error(`[SyncQueue] Operation permanently failed: ${item.entityType}:${item.entityId}`, error);
+        return { permanentlyFailed: true };
+      }
+
       await this.save();
     }
+    return { permanentlyFailed: false };
   }
 
   getAll(): SyncQueueItem[] {
     return [...this.queue];
   }
 
+  getFailedItems(): FailedSyncItem[] {
+    return [...this.failedItems];
+  }
+
+  getFailedCount(): number {
+    return this.failedItems.length;
+  }
+
+  async clearFailedItems(): Promise<void> {
+    this.failedItems = [];
+    await this.saveFailed();
+  }
+
+  async retryFailedItem(failedItemId: string): Promise<boolean> {
+    const index = this.failedItems.findIndex((f) => f.item.id === failedItemId);
+    if (index === -1) return false;
+
+    const failedItem = this.failedItems[index];
+    // Reset retry count and add back to queue
+    failedItem.item.retryCount = 0;
+    failedItem.item.lastError = undefined;
+    this.queue.push(failedItem.item);
+    this.failedItems.splice(index, 1);
+
+    await this.save();
+    await this.saveFailed();
+    return true;
+  }
+
   getPending(): SyncQueueItem[] {
-    // Return items with less than 5 retries
-    return this.queue.filter((item) => item.retryCount < 5);
+    // Return items with less than MAX_RETRY_COUNT retries
+    return this.queue.filter((item) => item.retryCount < MAX_RETRY_COUNT);
   }
 
   getByEntity(entityType: SyncEntityType, entityId: string): SyncQueueItem | undefined {
@@ -197,11 +289,14 @@ class SyncQueue {
 
   async clear(): Promise<void> {
     this.queue = [];
+    this.failedItems = [];
     this.isLoaded = false;
+    this.lastStorageError = null;
     try {
       await SecureStore.deleteItemAsync(this.storageKey);
+      await SecureStore.deleteItemAsync(this.failedStorageKey);
     } catch (error) {
-      console.warn('[SyncQueue] Failed to clear queue from storage:', error);
+      console.error('[SyncQueue] Failed to clear queue from storage:', error);
     }
   }
 }
@@ -215,6 +310,7 @@ class IdMappingStore {
   private reverseMap: Map<string, string> = new Map(); // convexId -> localId
   private storageKey = 'hoppa_id_mappings';
   private isLoaded = false;
+  private lastStorageError: string | null = null;
 
   async load(): Promise<void> {
     if (this.isLoaded) return;
@@ -233,8 +329,11 @@ class IdMappingStore {
         this.reverseMap = new Map();
       }
       this.isLoaded = true;
+      this.lastStorageError = null;
     } catch (error) {
-      console.warn('[IdMappingStore] Failed to load mappings from storage:', error);
+      const message = error instanceof Error ? error.message : 'Unknown storage error';
+      console.error('[IdMappingStore] Failed to load mappings from storage:', error);
+      this.lastStorageError = `Failed to load ID mappings: ${message}`;
       this.mappings = new Map();
       this.reverseMap = new Map();
       this.isLoaded = true;
@@ -245,9 +344,17 @@ class IdMappingStore {
     try {
       const mappingsArray = Array.from(this.mappings.values());
       await SecureStore.setItemAsync(this.storageKey, JSON.stringify(mappingsArray));
+      this.lastStorageError = null;
     } catch (error) {
-      console.warn('[IdMappingStore] Failed to save mappings to storage:', error);
+      const message = error instanceof Error ? error.message : 'Unknown storage error';
+      console.error('[IdMappingStore] Failed to save mappings to storage:', error);
+      this.lastStorageError = `Failed to save ID mappings: ${message}. Sync may fail.`;
+      throw new Error(this.lastStorageError);
     }
+  }
+
+  getStorageError(): string | null {
+    return this.lastStorageError;
   }
 
   async set(localId: string, convexId: string, entityType: SyncEntityType): Promise<void> {
@@ -317,6 +424,8 @@ export class SyncEngine {
     lastSyncAt: null,
     pendingOperations: 0,
     error: null,
+    failedOperations: 0,
+    storageError: null,
   };
   private listeners: Set<(state: SyncState) => void> = new Set();
 

@@ -136,6 +136,8 @@ describe('Offline Queue Hook - Logic Tests', () => {
         lastSyncAt: Date.now(),
         pendingOperations: 5,
         error: null,
+        failedOperations: 0,
+        storageError: null,
       };
 
       const hasPendingChanges = stateWithPending.pendingOperations > 0;
@@ -148,6 +150,8 @@ describe('Offline Queue Hook - Logic Tests', () => {
         lastSyncAt: null,
         pendingOperations: 3,
         error: null,
+        failedOperations: 0,
+        storageError: null,
       };
 
       const isSyncing = syncingState.status === 'syncing';
@@ -160,6 +164,8 @@ describe('Offline Queue Hook - Logic Tests', () => {
         lastSyncAt: Date.now(),
         pendingOperations: 2,
         error: 'Network failed',
+        failedOperations: 0,
+        storageError: null,
       };
 
       const hasError = errorState.status === 'error' && errorState.error !== null;
@@ -221,7 +227,7 @@ describe('Offline Queue Hook - Logic Tests', () => {
       jest.useFakeTimers();
 
       let syncCount = 0;
-      let timeoutId: NodeJS.Timeout | null = null;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
       const debounceMs = 500;
 
       const triggerSync = () => {
@@ -331,6 +337,8 @@ describe('Offline Queue Hook - Logic Tests', () => {
         lastSyncAt: null,
         pendingOperations: 0,
         error: null,
+        failedOperations: 0,
+        storageError: null,
       };
 
       const subscribe = (listener: (state: SyncState) => void) => {

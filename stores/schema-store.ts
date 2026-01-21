@@ -37,7 +37,7 @@ interface SchemaActions {
   deleteWorkoutDay: (id: string) => Promise<void>;
 
   // Exercise operations
-  addExercise: (dayId: string, exercise: Omit<Exercise, 'id' | 'dayId' | 'orderIndex'>) => Promise<Exercise>;
+  addExercise: (dayId: string, exercise: Omit<Exercise, 'id' | 'dayId' | 'orderIndex' | 'updatedAt'>) => Promise<Exercise>;
   updateExercise: (
     id: string,
     updates: Partial<Omit<Exercise, 'id' | 'dayId'>>
@@ -268,7 +268,7 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
   // Exercise operations
   addExercise: async (
     dayId: string,
-    exercise: Omit<Exercise, 'id' | 'dayId' | 'orderIndex'>
+    exercise: Omit<Exercise, 'id' | 'dayId' | 'orderIndex' | 'updatedAt'>
   ) => {
     set({ isLoading: true, error: null });
     try {
