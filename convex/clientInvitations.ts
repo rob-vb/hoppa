@@ -20,13 +20,15 @@ function getResendClient(): Resend {
   return new Resend(apiKey);
 }
 
-// Generate a secure random invite token
+// Generate a cryptographically secure random invite token
 function generateInviteToken(): string {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const randomValues = new Uint8Array(32);
+  crypto.getRandomValues(randomValues);
   let token = "";
   for (let i = 0; i < 32; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
+    token += chars.charAt(randomValues[i] % chars.length);
   }
   return token;
 }
