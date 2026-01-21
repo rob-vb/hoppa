@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -20,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { IncrementSelector } from '@/components/ui/increment-selector';
 import { ExerciseSelectorModal } from '@/components/ui/exercise-selector-modal';
+import { DraggableList } from '@/components/ui/draggable-list';
 import { useSchemaStore } from '@/stores/schema-store';
 import { Colors } from '@/constants/theme';
 import { EquipmentType } from '@/db/types';
@@ -122,31 +124,9 @@ export default function CreateSchemaScreen() {
     setDays(days.map((d) => (d.id === dayId ? { ...d, isExpanded: !d.isExpanded } : d)));
   };
 
-  const handleMoveDayUp = (dayId: string) => {
-    const index = days.findIndex((d) => d.id === dayId);
-    if (index <= 0) return;
-
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    const newDays = [...days];
-    [newDays[index - 1], newDays[index]] = [newDays[index], newDays[index - 1]];
+  const handleReorderDays = useCallback((newDays: LocalWorkoutDay[]) => {
     setDays(newDays);
-  };
-
-  const handleMoveDayDown = (dayId: string) => {
-    const index = days.findIndex((d) => d.id === dayId);
-    if (index < 0 || index >= days.length - 1) return;
-
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    const newDays = [...days];
-    [newDays[index], newDays[index + 1]] = [newDays[index + 1], newDays[index]];
-    setDays(newDays);
-  };
+  }, []);
 
   const handleAddExercise = (dayId: string) => {
     if (Platform.OS === 'ios') {
@@ -233,53 +213,9 @@ export default function CreateSchemaScreen() {
     });
   };
 
-  const handleMoveExerciseUp = (dayId: string, exerciseId: string) => {
-    const day = days.find((d) => d.id === dayId);
-    if (!day) return;
-
-    const index = day.exercises.findIndex((e) => e.id === exerciseId);
-    if (index <= 0) return;
-
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    setDays(
-      days.map((d) => {
-        if (d.id !== dayId) return d;
-        const newExercises = [...d.exercises];
-        [newExercises[index - 1], newExercises[index]] = [
-          newExercises[index],
-          newExercises[index - 1],
-        ];
-        return { ...d, exercises: newExercises };
-      })
-    );
-  };
-
-  const handleMoveExerciseDown = (dayId: string, exerciseId: string) => {
-    const day = days.find((d) => d.id === dayId);
-    if (!day) return;
-
-    const index = day.exercises.findIndex((e) => e.id === exerciseId);
-    if (index < 0 || index >= day.exercises.length - 1) return;
-
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-
-    setDays(
-      days.map((d) => {
-        if (d.id !== dayId) return d;
-        const newExercises = [...d.exercises];
-        [newExercises[index], newExercises[index + 1]] = [
-          newExercises[index + 1],
-          newExercises[index],
-        ];
-        return { ...d, exercises: newExercises };
-      })
-    );
-  };
+  const handleReorderExercises = useCallback((dayId: string, newExercises: LocalExercise[]) => {
+    setDays(days.map((d) => (d.id === dayId ? { ...d, exercises: newExercises } : d)));
+  }, [days]);
 
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
@@ -377,41 +313,12 @@ export default function CreateSchemaScreen() {
     dayId: string,
     exercise: LocalExercise,
     index: number,
-    totalExercises: number
+    isDragging: boolean
   ) => (
-    <View key={exercise.id} style={styles.exerciseContainer}>
+    <View style={[styles.exerciseContainer, isDragging && styles.exerciseDragging]}>
       <View style={styles.exerciseHeader}>
-        <View style={styles.exerciseReorderButtons}>
-          <Pressable
-            onPress={() => handleMoveExerciseUp(dayId, exercise.id)}
-            hitSlop={8}
-            style={[
-              styles.exerciseReorderButton,
-              index === 0 && styles.reorderButtonDisabled,
-            ]}
-            disabled={index === 0}
-          >
-            <IconSymbol
-              name="chevron.up"
-              size={14}
-              color={index === 0 ? Colors.dark.border : Colors.dark.icon}
-            />
-          </Pressable>
-          <Pressable
-            onPress={() => handleMoveExerciseDown(dayId, exercise.id)}
-            hitSlop={8}
-            style={[
-              styles.exerciseReorderButton,
-              index === totalExercises - 1 && styles.reorderButtonDisabled,
-            ]}
-            disabled={index === totalExercises - 1}
-          >
-            <IconSymbol
-              name="chevron.down"
-              size={14}
-              color={index === totalExercises - 1 ? Colors.dark.border : Colors.dark.icon}
-            />
-          </Pressable>
+        <View style={styles.dragHandle}>
+          <IconSymbol name="line.3.horizontal" size={16} color={Colors.dark.icon} />
         </View>
         <ThemedText type="defaultSemiBold" style={styles.exerciseNumber}>
           Exercise {index + 1}
@@ -544,37 +451,11 @@ export default function CreateSchemaScreen() {
     </View>
   );
 
-  const renderDay = (day: LocalWorkoutDay, index: number) => (
-    <Card key={day.id} style={styles.dayCard}>
+  const renderDay = (day: LocalWorkoutDay, index: number, isDragging: boolean) => (
+    <Card style={[styles.dayCard, isDragging && styles.dayCardDragging]}>
       <View style={styles.dayHeader}>
-        <View style={styles.reorderButtons}>
-          <Pressable
-            onPress={() => handleMoveDayUp(day.id)}
-            hitSlop={8}
-            style={[styles.reorderButton, index === 0 && styles.reorderButtonDisabled]}
-            disabled={index === 0}
-          >
-            <IconSymbol
-              name="chevron.up"
-              size={16}
-              color={index === 0 ? Colors.dark.border : Colors.dark.icon}
-            />
-          </Pressable>
-          <Pressable
-            onPress={() => handleMoveDayDown(day.id)}
-            hitSlop={8}
-            style={[
-              styles.reorderButton,
-              index === days.length - 1 && styles.reorderButtonDisabled,
-            ]}
-            disabled={index === days.length - 1}
-          >
-            <IconSymbol
-              name="chevron.down"
-              size={16}
-              color={index === days.length - 1 ? Colors.dark.border : Colors.dark.icon}
-            />
-          </Pressable>
+        <View style={styles.dragHandle}>
+          <IconSymbol name="line.3.horizontal" size={18} color={Colors.dark.icon} />
         </View>
         <Pressable
           onPress={() => handleToggleDay(day.id)}
@@ -623,9 +504,25 @@ export default function CreateSchemaScreen() {
             </ThemedText>
           )}
 
-          {day.exercises.map((exercise, exerciseIndex) =>
-            renderExercise(day.id, exercise, exerciseIndex, day.exercises.length)
+          {day.exercises.length > 0 && (
+            <View style={styles.exerciseListHint}>
+              <IconSymbol name="hand.draw" size={14} color={Colors.dark.textSecondary} />
+              <ThemedText style={styles.exerciseListHintText}>
+                Hold and drag to reorder exercises
+              </ThemedText>
+            </View>
           )}
+
+          <DraggableList
+            items={day.exercises}
+            keyExtractor={(exercise) => exercise.id}
+            renderItem={(exercise, exerciseIndex, isExerciseDragging) =>
+              renderExercise(day.id, exercise, exerciseIndex, isExerciseDragging)
+            }
+            onReorder={(newExercises) => handleReorderExercises(day.id, newExercises)}
+            itemHeight={400}
+            style={styles.exerciseList}
+          />
 
           <View style={styles.addExerciseButtons}>
             <Pressable
@@ -653,102 +550,123 @@ export default function CreateSchemaScreen() {
   );
 
   return (
-    <ThemedView style={styles.container}>
-      <ExerciseSelectorModal
-        visible={exerciseSelectorDayId !== null}
-        onClose={() => setExerciseSelectorDayId(null)}
-        onSelect={handleSelectExerciseFromLibrary}
-      />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={100}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <ThemedView style={styles.container}>
+        <ExerciseSelectorModal
+          visible={exerciseSelectorDayId !== null}
+          onClose={() => setExerciseSelectorDayId(null)}
+          onSelect={handleSelectExerciseFromLibrary}
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+          keyboardVerticalOffset={100}
         >
-          {error && (
-            <View style={styles.errorContainer}>
-              <ThemedText style={styles.errorText}>{error}</ThemedText>
-            </View>
-          )}
-
-          <View style={styles.section}>
-            <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Schema Details
-            </ThemedText>
-            <Input
-              label="Name"
-              placeholder="e.g., Push/Pull/Legs"
-              value={schemaName}
-              onChangeText={(text) => {
-                setSchemaName(text);
-                if (validationErrors.schemaName) {
-                  setValidationErrors((prev) => {
-                    const next = { ...prev };
-                    delete next.schemaName;
-                    return next;
-                  });
-                }
-              }}
-              error={validationErrors.schemaName}
-            />
-
-            <View style={styles.switchRow}>
-              <View style={styles.switchLabelContainer}>
-                <ThemedText style={styles.switchLabel}>Progressive Overload</ThemedText>
-                <ThemedText style={styles.switchHint}>
-                  Automatically increase weights when you hit your rep targets
-                </ThemedText>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {error && (
+              <View style={styles.errorContainer}>
+                <ThemedText style={styles.errorText}>{error}</ThemedText>
               </View>
-              <Switch
-                value={progressiveLoadingEnabled}
-                onValueChange={setProgressiveLoadingEnabled}
-                trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
-                thumbColor="#FFFFFF"
+            )}
+
+            <View style={styles.section}>
+              <ThemedText type="subtitle" style={styles.sectionTitle}>
+                Schema Details
+              </ThemedText>
+              <Input
+                label="Name"
+                placeholder="e.g., Push/Pull/Legs"
+                value={schemaName}
+                onChangeText={(text) => {
+                  setSchemaName(text);
+                  if (validationErrors.schemaName) {
+                    setValidationErrors((prev) => {
+                      const next = { ...prev };
+                      delete next.schemaName;
+                      return next;
+                    });
+                  }
+                }}
+                error={validationErrors.schemaName}
+              />
+
+              <View style={styles.switchRow}>
+                <View style={styles.switchLabelContainer}>
+                  <ThemedText style={styles.switchLabel}>Progressive Overload</ThemedText>
+                  <ThemedText style={styles.switchHint}>
+                    Automatically increase weights when you hit your rep targets
+                  </ThemedText>
+                </View>
+                <Switch
+                  value={progressiveLoadingEnabled}
+                  onValueChange={setProgressiveLoadingEnabled}
+                  trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Workout Days
+                </ThemedText>
+                {validationErrors.days && days.length === 0 && (
+                  <ThemedText style={styles.errorText}>{validationErrors.days}</ThemedText>
+                )}
+              </View>
+
+              {days.length > 0 && (
+                <View style={styles.dayListHint}>
+                  <IconSymbol name="hand.draw" size={14} color={Colors.dark.textSecondary} />
+                  <ThemedText style={styles.dayListHintText}>
+                    Hold and drag to reorder days
+                  </ThemedText>
+                </View>
+              )}
+
+              <DraggableList
+                items={days}
+                keyExtractor={(day) => day.id}
+                renderItem={renderDay}
+                onReorder={handleReorderDays}
+                itemHeight={80}
+                style={styles.dayList}
+              />
+
+              <Button
+                title="Add Workout Day"
+                variant="secondary"
+                onPress={handleAddDay}
+                fullWidth
               />
             </View>
-          </View>
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <ThemedText type="subtitle" style={styles.sectionTitle}>
-                Workout Days
-              </ThemedText>
-              {validationErrors.days && days.length === 0 && (
-                <ThemedText style={styles.errorText}>{validationErrors.days}</ThemedText>
-              )}
+            <View style={styles.bottomActions}>
+              <Button
+                title="Create Schema"
+                onPress={handleSave}
+                loading={isSaving || isLoading}
+                fullWidth
+              />
             </View>
-
-            {days.map((day, index) => renderDay(day, index))}
-
-            <Button
-              title="Add Workout Day"
-              variant="secondary"
-              onPress={handleAddDay}
-              fullWidth
-            />
-          </View>
-
-          <View style={styles.bottomActions}>
-            <Button
-              title="Create Schema"
-              onPress={handleSave}
-              loading={isSaving || isLoading}
-              fullWidth
-            />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </ThemedView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </ThemedView>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },
@@ -800,10 +718,28 @@ const styles = StyleSheet.create({
     color: Colors.dark.textSecondary,
     marginTop: 2,
   },
+  dayList: {
+    gap: 12,
+  },
+  dayListHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  dayListHintText: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+  },
   dayCard: {
     gap: 0,
     padding: 0,
     overflow: 'hidden',
+    marginBottom: 12,
+  },
+  dayCardDragging: {
+    borderColor: Colors.dark.primary,
+    borderWidth: 2,
   },
   dayHeader: {
     flexDirection: 'row',
@@ -811,15 +747,8 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  reorderButtons: {
-    flexDirection: 'column',
-    gap: 2,
-  },
-  reorderButton: {
+  dragHandle: {
     padding: 4,
-  },
-  reorderButtonDisabled: {
-    opacity: 0.3,
   },
   dayHeaderMain: {
     flex: 1,
@@ -854,11 +783,29 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.dark.border,
   },
+  exerciseList: {
+    gap: 12,
+  },
+  exerciseListHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+  },
+  exerciseListHintText: {
+    fontSize: 12,
+    color: Colors.dark.textSecondary,
+  },
   exerciseContainer: {
     backgroundColor: Colors.dark.background,
     borderRadius: 12,
     padding: 16,
     gap: 12,
+    marginBottom: 12,
+  },
+  exerciseDragging: {
+    borderColor: Colors.dark.primary,
+    borderWidth: 2,
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -866,13 +813,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 4,
     gap: 8,
-  },
-  exerciseReorderButtons: {
-    flexDirection: 'column',
-    gap: 0,
-  },
-  exerciseReorderButton: {
-    padding: 2,
   },
   exerciseNumber: {
     fontSize: 14,
@@ -918,9 +858,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rowInputItem: {
-    flex: 1,
-  },
-  rowInputItemWide: {
     flex: 1,
   },
   bottomActions: {
