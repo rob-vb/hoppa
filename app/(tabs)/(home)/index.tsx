@@ -21,8 +21,11 @@ interface WorkoutDayWithSchema {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { loadSchemas } = useSchemaStore();
-  const { startWorkout, resumeWorkout, session } = useWorkoutStore();
+  // Use selectors to prevent unnecessary re-renders when unrelated state changes
+  const loadSchemas = useSchemaStore((state) => state.loadSchemas);
+  const startWorkout = useWorkoutStore((state) => state.startWorkout);
+  const resumeWorkout = useWorkoutStore((state) => state.resumeWorkout);
+  const session = useWorkoutStore((state) => state.session);
 
   const [workoutDays, setWorkoutDays] = useState<WorkoutDayWithSchema[]>([]);
   const [isLoading, setIsLoading] = useState(true);

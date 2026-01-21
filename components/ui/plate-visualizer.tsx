@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -63,7 +64,11 @@ export function PlateVisualizer({
   showBreakdown = true,
   compact = false,
 }: PlateVisualizerProps) {
-  const result = plateResult ?? calculatePlates(targetWeight, baseWeight);
+  // Memoize the plate calculation to avoid expensive recomputation on every render
+  const result = useMemo(
+    () => plateResult ?? calculatePlates(targetWeight, baseWeight),
+    [plateResult, targetWeight, baseWeight]
+  );
   const { platesPerSide } = result;
 
   // Check if any microplates are used

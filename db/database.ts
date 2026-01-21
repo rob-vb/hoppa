@@ -124,6 +124,9 @@ async function initializeTables(): Promise<void> {
 
     -- Composite index for getLastWorkoutForDay queries (day_id + status + completed_at)
     CREATE INDEX IF NOT EXISTS idx_sessions_day_status_completed ON workout_sessions(day_id, status, completed_at DESC);
+
+    -- Index for calendar queries (started_at date range)
+    CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON workout_sessions(started_at);
   `);
 }
 
@@ -1322,6 +1325,7 @@ export interface ExerciseProgressData {
 
 /**
  * Get all exercises with their progress data
+ * Optimized to use batch queries instead of N+1 pattern
  */
 export async function getExercisesWithProgress(): Promise<ExerciseProgressData[]> {
   const database = await getDatabase();
@@ -1346,48 +1350,64 @@ export async function getExercisesWithProgress(): Promise<ExerciseProgressData[]
      ORDER BY s.name, wd.order_index, e.order_index`
   );
 
-  const result: ExerciseProgressData[] = [];
+  if (exercises.length === 0) return [];
 
-  for (const exercise of exercises) {
-    // Get weight history for this exercise
-    const historyRows = await database.getAllAsync<{
-      completed_at: number;
-      total_weight: number;
-    }>(
-      `SELECT ws.completed_at, el.total_weight
-       FROM exercise_logs el
-       JOIN workout_sessions ws ON el.session_id = ws.id
-       WHERE el.exercise_id = ?
-       AND ws.status = 'completed'
-       AND el.status = 'completed'
-       ORDER BY ws.completed_at ASC`,
-      [exercise.exercise_id]
-    );
+  // Batch query: Get all weight history for all exercises in one query
+  const allHistoryRows = await database.getAllAsync<{
+    exercise_id: string;
+    completed_at: number;
+    total_weight: number;
+  }>(
+    `SELECT el.exercise_id, ws.completed_at, el.total_weight
+     FROM exercise_logs el
+     JOIN workout_sessions ws ON el.session_id = ws.id
+     WHERE ws.status = 'completed'
+     AND el.status = 'completed'
+     ORDER BY el.exercise_id, ws.completed_at ASC`
+  );
 
-    // Get progression dates
-    const progressionRows = await database.getAllAsync<{ completed_at: number }>(
-      `SELECT ws.completed_at
-       FROM exercise_logs el
-       JOIN workout_sessions ws ON el.session_id = ws.id
-       WHERE el.exercise_id = ?
-       AND el.progression_earned = 1
-       AND ws.status = 'completed'
-       ORDER BY ws.completed_at ASC`,
-      [exercise.exercise_id]
-    );
+  // Batch query: Get all progression dates for all exercises in one query
+  const allProgressionRows = await database.getAllAsync<{
+    exercise_id: string;
+    completed_at: number;
+  }>(
+    `SELECT el.exercise_id, ws.completed_at
+     FROM exercise_logs el
+     JOIN workout_sessions ws ON el.session_id = ws.id
+     WHERE el.progression_earned = 1
+     AND ws.status = 'completed'
+     ORDER BY el.exercise_id, ws.completed_at ASC`
+  );
 
-    const progressionDates = progressionRows.map((row) => row.completed_at);
-
-    const weightHistory = historyRows.map((row) => ({
+  // Build lookup maps for O(1) access
+  const historyByExercise = new Map<string, Array<{ date: number; weight: number }>>();
+  for (const row of allHistoryRows) {
+    if (!historyByExercise.has(row.exercise_id)) {
+      historyByExercise.set(row.exercise_id, []);
+    }
+    historyByExercise.get(row.exercise_id)!.push({
       date: row.completed_at,
       weight: row.total_weight,
-    }));
+    });
+  }
 
+  const progressionsByExercise = new Map<string, number[]>();
+  for (const row of allProgressionRows) {
+    if (!progressionsByExercise.has(row.exercise_id)) {
+      progressionsByExercise.set(row.exercise_id, []);
+    }
+    progressionsByExercise.get(row.exercise_id)!.push(row.completed_at);
+  }
+
+  // Build result using the pre-fetched data
+  return exercises.map((exercise) => {
+    const weightHistory = historyByExercise.get(exercise.exercise_id) ?? [];
+    const progressionDates = progressionsByExercise.get(exercise.exercise_id) ?? [];
     const startingWeight = weightHistory.length > 0
       ? weightHistory[0].weight
       : exercise.current_weight;
 
-    result.push({
+    return {
       exerciseId: exercise.exercise_id,
       name: exercise.exercise_name,
       dayName: exercise.day_name,
@@ -1397,10 +1417,8 @@ export async function getExercisesWithProgress(): Promise<ExerciseProgressData[]
       progressionCount: progressionDates.length,
       progressionDates,
       weightHistory,
-    });
-  }
-
-  return result;
+    };
+  });
 }
 
 export interface CalendarDay {
