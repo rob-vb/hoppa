@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { ThemedText } from '@/components/themed-text';
@@ -18,6 +18,8 @@ import { useAuth } from '@/contexts/auth-context';
 
 export default function RegisterScreen() {
   const { signUp, signInWithGoogle, signInWithApple } = useAuth();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+  const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,7 +52,11 @@ export default function RegisterScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signUp(email, password, name || undefined);
-      // Navigation is handled automatically by the auth state change in _layout.tsx
+      // If there's a returnTo param (e.g., from invite flow), navigate there
+      if (returnTo) {
+        router.replace(returnTo as `/${string}`);
+      }
+      // Otherwise, navigation is handled automatically by the auth state change in _layout.tsx
     } catch {
       setError('Failed to create account. Please try again.');
       if (Platform.OS === 'ios') {
@@ -69,6 +75,9 @@ export default function RegisterScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signInWithGoogle();
+      if (returnTo) {
+        router.replace(returnTo as `/${string}`);
+      }
     } catch {
       setError('Failed to sign in with Google');
       if (Platform.OS === 'ios') {
@@ -87,6 +96,9 @@ export default function RegisterScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signInWithApple();
+      if (returnTo) {
+        router.replace(returnTo as `/${string}`);
+      }
     } catch {
       setError('Failed to sign in with Apple');
       if (Platform.OS === 'ios') {
@@ -226,7 +238,10 @@ export default function RegisterScreen() {
               <ThemedText style={styles.footerText}>
                 Already have an account?{' '}
               </ThemedText>
-              <Link href="/auth/login" asChild>
+              <Link
+                href={returnTo ? { pathname: '/auth/login', params: { returnTo } } : '/auth/login'}
+                asChild
+              >
                 <TouchableOpacity>
                   <ThemedText style={styles.linkText}>Sign In</ThemedText>
                 </TouchableOpacity>

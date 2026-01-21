@@ -21,14 +21,17 @@ function RootLayoutNav() {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === 'auth';
+    const inInviteGroup = segments[0] === 'invite';
     const firstSegment = segments[0] as string | undefined;
     const isLandingPage = !firstSegment || firstSegment === 'index';
 
-    if (!isAuthenticated && !inAuthGroup && !isLandingPage) {
+    if (!isAuthenticated && !inAuthGroup && !isLandingPage && !inInviteGroup) {
       router.replace('/');
     } else if (isAuthenticated && (inAuthGroup || isLandingPage)) {
       router.replace('/(tabs)/(home)');
     }
+    // Note: Authenticated users on invite pages are allowed to stay
+    // The invite screen handles accepting the invitation
   }, [isAuthenticated, segments, isLoading, router]);
 
   if (isLoading) {
@@ -57,6 +60,12 @@ function RootLayoutNav() {
         name="trainer-subscription"
         options={{
           presentation: 'modal',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="invite/[token]"
+        options={{
           headerShown: false,
         }}
       />

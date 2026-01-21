@@ -8,7 +8,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { ThemedText } from '@/components/themed-text';
@@ -17,6 +17,8 @@ import { useAuth } from '@/contexts/auth-context';
 
 export default function LoginScreen() {
   const { signIn, signInWithGoogle, signInWithApple } = useAuth();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,11 @@ export default function LoginScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signIn(email, password);
-      // Navigation is handled automatically by the auth state change in _layout.tsx
+      // If there's a returnTo param (e.g., from invite flow), navigate there
+      if (returnTo) {
+        router.replace(returnTo as `/${string}`);
+      }
+      // Otherwise, navigation is handled automatically by the auth state change in _layout.tsx
     } catch {
       setError('Invalid email or password');
       if (Platform.OS === 'ios') {
@@ -56,6 +62,9 @@ export default function LoginScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signInWithGoogle();
+      if (returnTo) {
+        router.replace(returnTo as `/${string}`);
+      }
     } catch {
       setError('Failed to sign in with Google');
       if (Platform.OS === 'ios') {
@@ -74,6 +83,9 @@ export default function LoginScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       await signInWithApple();
+      if (returnTo) {
+        router.replace(returnTo as `/${string}`);
+      }
     } catch {
       setError('Failed to sign in with Apple');
       if (Platform.OS === 'ios') {
@@ -181,7 +193,10 @@ export default function LoginScreen() {
             <ThemedText style={styles.footerText}>
               Don&apos;t have an account?{' '}
             </ThemedText>
-            <Link href="/auth/register" asChild>
+            <Link
+              href={returnTo ? { pathname: '/auth/register', params: { returnTo } } : '/auth/register'}
+              asChild
+            >
               <TouchableOpacity>
                 <ThemedText style={styles.linkText}>Sign Up</ThemedText>
               </TouchableOpacity>
